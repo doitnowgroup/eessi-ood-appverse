@@ -1,0 +1,22 @@
+---
+name: "ROOT - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "ROOT"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch CERN ROOT using EESSI.
+  Interactive data analysis, visualization and C++ development
+  using ROOT and the Cling interpreter.
+

@@ -1,0 +1,22 @@
+---
+name: "MLflow - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "MLflow"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch MLflow using software provided by EESSI.
+  Track machine learning experiments, parameters,
+  metrics, models and artifacts.
+

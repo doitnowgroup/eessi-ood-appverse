@@ -1,0 +1,22 @@
+---
+name: "LavaVu - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "LavaVu"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch LavaVu using EESSI.
+  Explore and visualize scientific 2D and 3D data through an
+  interactive OpenGL-based viewer.
+

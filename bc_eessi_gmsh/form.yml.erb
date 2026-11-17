@@ -1,0 +1,79 @@
+<%
+  require 'json'
+
+  eessi_release = "2025.06"
+  software_name = "gmsh"
+  pinned_module = ""
+  fallback_modules = [{"module": "gmsh/4.15.0-foss-2025a", "version": "4.15.0"}]
+
+  format_option = lambda do |v|
+    mod = (v['module'] || v[:module]).to_s
+    ver = (v['version'] || v[:version]).to_s.strip
+    mod_ver = (v['module_version'] || v[:module_version]).to_s.strip
+
+    if mod_ver.empty? && mod.include?('/')
+      mod_ver = mod.split('/', 2)[1]
+    end
+
+    display_ver = !mod_ver.empty? ? mod_ver : ver
+    label = display_ver.empty? ? mod : "#{software_name} #{display_ver}"
+    [label, mod]
+  end
+
+  catalog_candidates = [
+    "/var/cache/eessi-ood/eessi_catalog_#{eessi_release}.json",
+    "/var/cache/eessi-ood/eessi_catalog.json"
+  ]
+
+  @resolved_modules = []
+
+  if !pinned_module.empty?
+    @resolved_modules = fallback_modules.map(&format_option)
+  else
+    catalog_path = catalog_candidates.find { |p| File.readable?(p) }
+    if catalog_path
+      begin
+        data = JSON.parse(File.read(catalog_path))
+        if data['eessi_version'].to_s == eessi_release
+          entries = data.dig('software', software_name, 'versions') || []
+          @resolved_modules = entries.map(&format_option)
+        end
+      rescue StandardError
+        @resolved_modules = []
+      end
+    end
+  end
+
+  if @resolved_modules.empty?
+    @resolved_modules = fallback_modules.map(&format_option)
+  end
+%>
+
+---
+cluster: "*"
+attributes:
+
+  eessi_module:
+    widget: "select"
+    label: "Gmsh version"
+    help: "Select a Gmsh version provided by EESSI."
+    options:
+    <% @resolved_modules.each do |label, mod| %>
+      - ["<%= label %>", "<%= mod %>"]
+    <% end %>
+    value: "<%= @resolved_modules.first&.last %>"
+    required: true
+
+  working_dir:
+    widget: "path_selector"
+    label: "Working Directory"
+    help: "Select the directory containing your geometry and mesh files."
+    value: ""
+    show_files: false
+    show_hidden: false
+    popup_title: "Select Working Directory"
+
+form:
+  - eessi_module
+  - bc_num_hours
+  - working_dir

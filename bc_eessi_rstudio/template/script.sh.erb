@@ -1,0 +1,96 @@
+
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?RStudio executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${port:?Port is missing}"
+: "${RSTUDIO_PASSWORD:?RStudio password is missing}"
+
+RSERVER="${APP_EXECUTABLE_PATH}"
+RSESSION="$(command -v rsession)"
+R_EXECUTABLE="$(command -v R)"
+
+WORKING_DIR="${PWD}"
+RSTUDIO_AUTH="${WORKING_DIR}/bin/auth"
+
+if [[ ! -x "${RSTUDIO_AUTH}" ]]; then
+    echo "ERROR: RStudio authentication helper is missing."
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Create private runtime directory
+# ----------------------------------------------------------------------
+
+umask 077
+
+RSTUDIO_TMPDIR="$(mktemp -d "/tmp/ood-rstudio-${USER}-XXXXXX")"
+
+cleanup() {
+    rm -rf -- "${RSTUDIO_TMPDIR}"
+}
+
+trap cleanup EXIT
+
+RSTUDIO_STATE="${RSTUDIO_TMPDIR}/rstudio-server"
+RSTUDIO_DB="${RSTUDIO_TMPDIR}/sqlite"
+
+mkdir -p "${RSTUDIO_STATE}" "${RSTUDIO_DB}"
+
+
+# ----------------------------------------------------------------------
+# SQLite database configuration
+# ----------------------------------------------------------------------
+
+DATABASE_CONFIG="${RSTUDIO_TMPDIR}/database.conf"
+
+cat > "${DATABASE_CONFIG}" <<EOF
+provider=sqlite
+directory=${RSTUDIO_DB}
+EOF
+
+
+# ----------------------------------------------------------------------
+# RStudio secure cookie key
+# ----------------------------------------------------------------------
+
+COOKIE_KEY="${RSTUDIO_STATE}/secure-cookie-key"
+
+openssl rand -hex 32 > "${COOKIE_KEY}"
+
+chmod 600 "${COOKIE_KEY}"
+
+
+# ----------------------------------------------------------------------
+# Start RStudio Server
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo "Starting RStudio Server..."
+echo "Host: ${host}"
+echo "Port: ${port}"
+echo "RStudio: ${RSERVER}"
+echo "R: ${R_EXECUTABLE}"
+
+"${RSERVER}" \
+    --server-daemonize=0 \
+    --server-user="${USER}" \
+    --server-pid-file="${RSTUDIO_STATE}/rserver.pid" \
+    --www-port="${port}" \
+    --www-address="0.0.0.0" \
+    --auth-none=0 \
+    --auth-pam-helper-path="${RSTUDIO_AUTH}" \
+    --auth-encrypt-password=0 \
+    --rsession-path="${RSESSION}" \
+    --rsession-which-r="${R_EXECUTABLE}" \
+    --server-data-dir="${RSTUDIO_STATE}" \
+    --database-config-file="${DATABASE_CONFIG}" \
+    --secure-cookie-key-file="${COOKIE_KEY}"

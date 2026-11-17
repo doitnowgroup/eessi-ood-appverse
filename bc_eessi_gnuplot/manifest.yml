@@ -1,0 +1,21 @@
+---
+name: "gnuplot - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "gnuplot"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch an interactive gnuplot environment using EESSI.
+  Create and visualize scientific plots through a graphical terminal.
+

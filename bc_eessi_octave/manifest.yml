@@ -1,0 +1,22 @@
+---
+name: "GNU Octave - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "GNU Octave"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch GNU Octave using EESSI.
+  Perform numerical computations, data analysis, matrix operations,
+  scientific programming and visualization using the Octave graphical interface.
+

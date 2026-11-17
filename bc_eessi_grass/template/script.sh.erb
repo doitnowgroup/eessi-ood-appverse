@@ -1,0 +1,311 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?GRASS executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+echo "============================================================"
+echo "Starting GRASS GIS - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "EESSI release:     ${EESSI_VERSION:-unknown}"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "GRASS executable:  ${APP_EXECUTABLE_PATH}"
+echo "GRASS version:     ${GRASS_VERSION:-unknown}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Desktop environment
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+export GRASS_GUI="wxpython"
+
+
+# ----------------------------------------------------------------------
+# User GRASS configuration
+# ----------------------------------------------------------------------
+
+mkdir -p "${HOME}/.grass8"
+
+if [[ ! -w "${HOME}/.grass8" ]]; then
+    echo "ERROR: GRASS configuration directory is not writable:"
+    echo "  ${HOME}/.grass8"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# GRASS project and per-user mapset
+# ----------------------------------------------------------------------
+#
+# The project contains the PERMANENT mapset with the base/reference data.
+#
+# PERMANENT may be read-only.
+#
+# Each OOD user works in their own writable mapset:
+#
+#   ~/grassdata/world_latlong_wgs84/<username>
+#
+# Example:
+#
+#   ~/grassdata/world_latlong_wgs84/<username>
+#
+# This prevents GRASS from trying to use the read-only PERMANENT mapset
+# as the active working mapset.
+# ----------------------------------------------------------------------
+
+GRASS_DATABASE="${HOME}/grassdata"
+GRASS_PROJECT="${GRASS_DATABASE}/world_latlong_wgs84"
+GRASS_MAPSET_NAME="$(id -un)"
+GRASS_MAPSET="${GRASS_PROJECT}/${GRASS_MAPSET_NAME}"
+GRASS_PERMANENT="${GRASS_PROJECT}/PERMANENT"
+
+export GRASS_DATABASE
+export GRASS_PROJECT
+export GRASS_MAPSET_NAME
+export GRASS_MAPSET
+
+echo
+echo "GRASS database:"
+echo "  ${GRASS_DATABASE}"
+
+echo "GRASS project:"
+echo "  ${GRASS_PROJECT}"
+
+echo "GRASS PERMANENT mapset:"
+echo "  ${GRASS_PERMANENT}"
+
+echo "GRASS user mapset:"
+echo "  ${GRASS_MAPSET}"
+
+
+# ----------------------------------------------------------------------
+# Validate GRASS project
+# ----------------------------------------------------------------------
+
+if [[ ! -d "${GRASS_PROJECT}" ]]; then
+    echo
+    echo "ERROR: GRASS project does not exist:"
+    echo "  ${GRASS_PROJECT}"
+    exit 1
+fi
+
+if [[ ! -d "${GRASS_PERMANENT}" ]]; then
+    echo
+    echo "ERROR: GRASS PERMANENT mapset does not exist:"
+    echo "  ${GRASS_PERMANENT}"
+    exit 1
+fi
+
+if [[ ! -r "${GRASS_PERMANENT}" || ! -x "${GRASS_PERMANENT}" ]]; then
+    echo
+    echo "ERROR: GRASS PERMANENT mapset is not accessible:"
+    echo "  ${GRASS_PERMANENT}"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Ensure project directory can contain a user mapset
+# ----------------------------------------------------------------------
+
+if [[ ! -w "${GRASS_PROJECT}" ]]; then
+
+    CURRENT_UID="$(id -u)"
+    PROJECT_UID="$(stat -c '%u' "${GRASS_PROJECT}")"
+
+    if [[ "${CURRENT_UID}" == "${PROJECT_UID}" ]]; then
+
+        echo
+        echo "GRASS project is owned by the current user but is not writable."
+        echo "Adding owner write permission:"
+        echo "  chmod u+w ${GRASS_PROJECT}"
+
+        chmod u+w "${GRASS_PROJECT}"
+
+    else
+
+        echo
+        echo "ERROR: GRASS project is not writable and is not owned by the current user:"
+        echo "  ${GRASS_PROJECT}"
+        echo
+        echo "A writable project directory is required to create:"
+        echo "  ${GRASS_MAPSET}"
+
+        exit 1
+    fi
+fi
+
+if [[ ! -w "${GRASS_PROJECT}" ]]; then
+    echo
+    echo "ERROR: GRASS project is still not writable:"
+    echo "  ${GRASS_PROJECT}"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Create per-user mapset if necessary
+# ----------------------------------------------------------------------
+
+if [[ ! -d "${GRASS_MAPSET}" ]]; then
+
+    echo
+    echo "User mapset does not exist."
+    echo "Creating:"
+    echo "  ${GRASS_MAPSET}"
+
+    set +e
+
+    "${APP_EXECUTABLE_PATH}" \
+        -c "${GRASS_MAPSET}" \
+        -e \
+        > "${SESSION_OUTPUT_DIR}/grass-mapset-create.log" 2>&1
+
+    CREATE_EXIT_CODE=$?
+
+    set -e
+
+    if [[ ${CREATE_EXIT_CODE} -ne 0 ]]; then
+
+        echo
+        echo "ERROR: Failed to create GRASS user mapset."
+        echo
+        echo "Mapset creation log:"
+        echo "------------------------------------------------------------"
+
+        if [[ -f "${SESSION_OUTPUT_DIR}/grass-mapset-create.log" ]]; then
+            cat "${SESSION_OUTPUT_DIR}/grass-mapset-create.log"
+        fi
+
+        echo "------------------------------------------------------------"
+
+        exit ${CREATE_EXIT_CODE}
+    fi
+fi
+
+
+# ----------------------------------------------------------------------
+# Validate user mapset
+# ----------------------------------------------------------------------
+
+if [[ ! -d "${GRASS_MAPSET}" ]]; then
+    echo
+    echo "ERROR: GRASS user mapset does not exist:"
+    echo "  ${GRASS_MAPSET}"
+    exit 1
+fi
+
+if [[ ! -w "${GRASS_MAPSET}" ]]; then
+    echo
+    echo "ERROR: GRASS user mapset is not writable:"
+    echo "  ${GRASS_MAPSET}"
+    exit 1
+fi
+
+# A valid mapset should contain a WIND file.
+if [[ ! -f "${GRASS_MAPSET}/WIND" ]]; then
+    echo
+    echo "ERROR: GRASS user mapset does not appear to be valid."
+    echo "Missing:"
+    echo "  ${GRASS_MAPSET}/WIND"
+    exit 1
+fi
+
+echo
+echo "GRASS user mapset: OK"
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+echo
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+cleanup() {
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT
+
+sleep 1
+
+if ! kill -0 "${WM_PID}" 2>/dev/null; then
+    echo "WARNING: Openbox exited immediately."
+    echo "See:"
+    echo "  ${SESSION_OUTPUT_DIR}/window-manager.log"
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch GRASS wxGUI
+# ----------------------------------------------------------------------
+#
+# Launch GRASS explicitly in the per-user writable mapset.
+#
+# Do not launch plain:
+#
+#   grass --gui
+#
+# because GRASS may otherwise select PERMANENT, which is read-only.
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo
+echo "Launching GRASS GIS wxGUI..."
+echo
+echo "Active mapset:"
+echo "  ${GRASS_MAPSET}"
+echo
+
+set +e
+
+"${APP_EXECUTABLE_PATH}" \
+    --gui \
+    "${GRASS_MAPSET}" \
+    > "${SESSION_OUTPUT_DIR}/grass.log" 2>&1
+
+GRASS_EXIT_CODE=$?
+
+set -e
+
+echo
+echo "GRASS GIS exited with code: ${GRASS_EXIT_CODE}"
+
+if [[ ${GRASS_EXIT_CODE} -ne 0 ]]; then
+
+    echo
+    echo "GRASS log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/grass.log" ]]; then
+        tail -n 150 "${SESSION_OUTPUT_DIR}/grass.log"
+    else
+        echo "GRASS log was not created."
+    fi
+
+    echo "------------------------------------------------------------"
+fi
+
+exit "${GRASS_EXIT_CODE}"

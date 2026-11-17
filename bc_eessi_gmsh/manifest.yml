@@ -1,0 +1,21 @@
+---
+name: "Gmsh - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "Gmsh"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch Gmsh using software provided by EESSI.
+  Create, generate and visualize computational meshes.
+

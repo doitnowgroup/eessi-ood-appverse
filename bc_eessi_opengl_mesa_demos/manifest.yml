@@ -1,0 +1,22 @@
+---
+name: "OpenGL / Mesa Demos - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "OpenGL / Mesa Demos"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch OpenGL and Mesa demonstration and diagnostic tools using EESSI.
+  Includes graphical OpenGL demos and utilities for inspecting the
+  OpenGL, GLX and EGL rendering environment.
+

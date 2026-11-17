@@ -1,0 +1,17 @@
+title: "RStudio Server - EESSI"
+
+description: >
+  Open OnDemand interactive RStudio-Server application using
+  software provided by the EESSI software stack.
+
+software: "RStudio Server"
+
+app_type: "batch-connect-basic"
+
+implementation_tags:
+  - "batch connect"
+  - "modules"
+
+maintainer:
+  name: "Do IT Now"
+  support_url: "ood@doitnowgroup.com"

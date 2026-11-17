@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?ROOT executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+echo "============================================================"
+echo "Starting ROOT - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "EESSI release:     ${EESSI_VERSION:-unknown}"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "ROOT executable:   ${APP_EXECUTABLE_PATH}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Validate xterm
+# ----------------------------------------------------------------------
+
+XTERM_BIN="$(command -v xterm 2>/dev/null || true)"
+
+if [[ -z "${XTERM_BIN}" ]]; then
+    echo "ERROR: xterm was not found."
+    echo "ROOT requires an interactive terminal for the Cling prompt."
+    exit 1
+fi
+
+echo "xterm:"
+echo "  ${XTERM_BIN}"
+
+
+# ----------------------------------------------------------------------
+# Desktop resources
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+
+# ----------------------------------------------------------------------
+# Create ROOT startup macro
+# ----------------------------------------------------------------------
+#
+# ROOT >= 6.24 uses the web-based RBrowser for TBrowser by default.
+#
+# For an OOD VNC session we explicitly request TRootBrowser so that
+# the ROOT browser is rendered as a native X11 window inside VNC.
+# ----------------------------------------------------------------------
+
+ROOT_STARTUP_MACRO="${SESSION_OUTPUT_DIR}/ood_root_start.C"
+
+cat > "${ROOT_STARTUP_MACRO}" <<'ROOTEOF'
+{
+    gEnv->SetValue("Browser.Name", "TRootBrowser");
+
+    std::cout << std::endl;
+    std::cout << "ROOT Open OnDemand session" << std::endl;
+    std::cout << "--------------------------" << std::endl;
+    std::cout << "Classic ROOT browser enabled." << std::endl;
+    std::cout << std::endl;
+
+    new TBrowser();
+}
+ROOTEOF
+
+echo
+echo "ROOT startup macro:"
+echo "  ${ROOT_STARTUP_MACRO}"
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+echo
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+cleanup() {
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT
+
+sleep 1
+
+if ! kill -0 "${WM_PID}" 2>/dev/null; then
+    echo "WARNING: Openbox exited immediately."
+    echo "See:"
+    echo "  ${SESSION_OUTPUT_DIR}/window-manager.log"
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch ROOT in an interactive terminal
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo
+echo "Launching ROOT interactive session..."
+echo
+
+export ROOT_OOD_EXECUTABLE="${APP_EXECUTABLE_PATH}"
+export ROOT_OOD_WORKDIR="${OOD_WD}"
+export ROOT_OOD_STARTUP="${ROOT_STARTUP_MACRO}"
+
+set +e
+
+"${XTERM_BIN}" \
+    -title "ROOT - EESSI" \
+    -geometry 120x36 \
+    -e /bin/bash -lc '
+        cd "${ROOT_OOD_WORKDIR}" || exit 1
+
+        echo "============================================================"
+        echo " ROOT - EESSI"
+        echo "============================================================"
+        echo
+        echo "Working directory:"
+        echo "  ${ROOT_OOD_WORKDIR}"
+        echo
+        echo "Starting ROOT..."
+        echo
+
+        exec "${ROOT_OOD_EXECUTABLE}" \
+            -l \
+            "${ROOT_OOD_STARTUP}"
+    ' \
+    > "${SESSION_OUTPUT_DIR}/root-xterm.log" 2>&1
+
+ROOT_EXIT_CODE=$?
+
+set -e
+
+echo
+echo "ROOT terminal exited with code: ${ROOT_EXIT_CODE}"
+
+if [[ ${ROOT_EXIT_CODE} -ne 0 ]]; then
+
+    echo
+    echo "ROOT/xterm log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/root-xterm.log" ]]; then
+        tail -n 100 "${SESSION_OUTPUT_DIR}/root-xterm.log"
+    fi
+
+    echo "------------------------------------------------------------"
+fi
+
+exit "${ROOT_EXIT_CODE}"

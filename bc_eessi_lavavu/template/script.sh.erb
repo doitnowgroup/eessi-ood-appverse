@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?Python executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+echo "============================================================"
+echo "Starting LavaVu - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "EESSI release:     ${EESSI_VERSION:-unknown}"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "Python executable: ${APP_EXECUTABLE_PATH}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Validate LavaVu Python package
+# ----------------------------------------------------------------------
+
+echo "Checking LavaVu Python package..."
+
+if ! "${APP_EXECUTABLE_PATH}" - <<'PY'
+import lavavu
+import importlib.util
+
+print("LavaVu module:", lavavu.__file__)
+
+spec = importlib.util.find_spec("lavavu.__main__")
+
+if spec is None:
+    raise RuntimeError("lavavu.__main__ is not available")
+
+print("LavaVu interactive entry point:", spec.origin)
+PY
+then
+    echo
+    echo "ERROR: LavaVu Python package is not usable."
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Desktop environment
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+
+# ----------------------------------------------------------------------
+# Start lightweight window manager
+# ----------------------------------------------------------------------
+
+echo
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+cleanup() {
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT
+
+sleep 1
+
+if ! kill -0 "${WM_PID}" 2>/dev/null; then
+    echo "WARNING: Openbox exited immediately."
+    echo "See:"
+    echo "  ${SESSION_OUTPUT_DIR}/window-manager.log"
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch LavaVu
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo
+echo "Launching LavaVu interactive viewer..."
+echo
+
+set +e
+
+if [[ -n "${LAVAVU_INPUT:-}" ]]; then
+
+    echo "Input file:"
+    echo "  ${LAVAVU_INPUT}"
+
+    "${APP_EXECUTABLE_PATH}" \
+        -m lavavu \
+        "${LAVAVU_INPUT}" \
+        > "${SESSION_OUTPUT_DIR}/lavavu.log" 2>&1
+
+else
+
+    echo "Starting empty LavaVu viewer."
+
+    "${APP_EXECUTABLE_PATH}" \
+        -m lavavu \
+        > "${SESSION_OUTPUT_DIR}/lavavu.log" 2>&1
+
+fi
+
+LAVAVU_EXIT_CODE=$?
+
+set -e
+
+echo
+echo "LavaVu exited with code: ${LAVAVU_EXIT_CODE}"
+
+if [[ ${LAVAVU_EXIT_CODE} -ne 0 ]]; then
+    echo
+    echo "LavaVu log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/lavavu.log" ]]; then
+        tail -n 100 "${SESSION_OUTPUT_DIR}/lavavu.log"
+    fi
+
+    echo "------------------------------------------------------------"
+fi
+
+exit "${LAVAVU_EXIT_CODE}"

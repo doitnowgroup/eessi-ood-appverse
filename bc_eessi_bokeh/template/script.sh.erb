@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# ------------------------------------------------------------
+# Validate environment
+# ------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?Bokeh executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${host:?OOD hostname is missing}"
+: "${port:?OOD port is missing}"
+
+cd "${OOD_WD}"
+
+# ------------------------------------------------------------
+# Configure OOD reverse proxy
+# ------------------------------------------------------------
+
+BOKEH_PREFIX="/node/${host}/${port}"
+
+# Browser-facing OOD hostname.
+# Change this if users access OOD through a different DNS name.
+OOD_PUBLIC_HOST="${OOD_PUBLIC_HOST:-${OOD_SERVERNAME:-$(hostname -f)}}"
+
+echo "====================================="
+echo "Starting Bokeh - EESSI"
+echo "====================================="
+
+echo "Module: ${EESSI_MODULE}"
+echo "Executable: ${APP_EXECUTABLE_PATH}"
+echo "Host: ${host}"
+echo "Port: ${port}"
+echo "Prefix: ${BOKEH_PREFIX}"
+echo "Working directory: ${OOD_WD}"
+
+# ------------------------------------------------------------
+# Launch Bokeh server
+# ------------------------------------------------------------
+
+exec "${APP_EXECUTABLE_PATH}" serve "${OOD_WD}/main.py" \
+    --address "${host}" \
+    --port "${port}" \
+    --prefix "${BOKEH_PREFIX}" \
+    --allow-websocket-origin "${OOD_PUBLIC_HOST}" \
+    --use-xheaders \
+    --log-level info

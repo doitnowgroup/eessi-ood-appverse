@@ -1,0 +1,21 @@
+---
+name: "jgmenu - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "jgmenu"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch the jgmenu X11 application menu using EESSI.
+  Access applications and tools through an interactive graphical menu.
+

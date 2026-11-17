@@ -1,0 +1,22 @@
+---
+name: "IPython QtConsole - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "IPython QtConsole"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch an IPython QtConsole using the EESSI IPython stack.
+  Provides an interactive Qt-based Python environment with rich output,
+  syntax highlighting and scientific computing support.
+

@@ -1,0 +1,19 @@
+---
+name: "JupyterLab - EESSI"
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "JupyterLab"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch JupyterLab using software provided by EESSI.
+

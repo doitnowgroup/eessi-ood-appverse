@@ -1,0 +1,22 @@
+---
+name: "TensorBoard - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "TensorBoard"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch TensorBoard using software provided by EESSI.
+  Visualize machine learning training metrics,
+  computational graphs and experiment results.
+

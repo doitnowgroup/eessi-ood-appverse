@@ -1,0 +1,17 @@
+title: "Valgrind - EESSI"
+
+description: >
+  Open OnDemand interactive Valgrind application
+  using software provided by the EESSI software stack.
+
+software: "Valgrind"
+
+app_type: "batch-connect-vnc"
+
+implementation_tags:
+  - "batch connect"
+  - "modules"
+
+maintainer:
+  name: "Do IT Now"
+  support_url: "ood@doitnowgroup.com"

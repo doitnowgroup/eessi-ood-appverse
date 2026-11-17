@@ -1,0 +1,21 @@
+---
+name: "Bokeh - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "Bokeh"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch interactive Bokeh dashboards using EESSI.
+  Visualize scientific data directly in your browser.
+

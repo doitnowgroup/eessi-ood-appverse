@@ -1,0 +1,22 @@
+---
+name: "GRASS GIS - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "GRASS GIS"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch GRASS GIS using EESSI.
+  Perform raster, vector and geospatial analysis, image processing,
+  spatial modelling and scientific visualization using the GRASS wxGUI.
+

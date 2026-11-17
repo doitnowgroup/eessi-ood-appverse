@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${MESA_DEMO:?OpenGL/Mesa tool is missing}"
+: "${MESA_DEMO_EXECUTABLE:?OpenGL/Mesa executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+unset WAYLAND_DISPLAY || true
+
+
+echo "============================================================"
+echo "OpenGL / Mesa Demos - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "Host:              $(hostname)"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "Tool:              ${MESA_DEMO}"
+echo "Rendering mode:    ${RENDERING_MODE:-unknown}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+if [[ ! -x /usr/bin/openbox ]]; then
+    echo "ERROR: /usr/bin/openbox is unavailable."
+    exit 1
+fi
+
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+
+cleanup() {
+
+    echo
+    echo "Cleaning up OpenGL / Mesa session..."
+
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT INT TERM
+
+sleep 1
+
+cd "${OOD_WD}"
+
+
+# ----------------------------------------------------------------------
+# Record OpenGL information for diagnostics
+# ----------------------------------------------------------------------
+
+if command -v glxinfo >/dev/null 2>&1; then
+
+    glxinfo -B \
+        > "${SESSION_OUTPUT_DIR}/glxinfo-summary.log" 2>&1 \
+        || true
+
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch graphical demos
+# ----------------------------------------------------------------------
+
+case "${MESA_DEMO}" in
+
+    glxgears|glxheads)
+
+        echo "Launching ${MESA_DEMO}..."
+
+        set +e
+
+        "${MESA_DEMO_EXECUTABLE}" \
+            > "${SESSION_OUTPUT_DIR}/${MESA_DEMO}.log" 2>&1
+
+        RC=$?
+
+        set -e
+        ;;
+
+
+# ----------------------------------------------------------------------
+# Launch diagnostic tools in xterm
+# ----------------------------------------------------------------------
+
+    glxinfo|eglinfo)
+
+        INFO_SCRIPT="${SESSION_OUTPUT_DIR}/mesa-info.sh"
+
+        cat > "${INFO_SCRIPT}" <<'SHELL'
+#!/usr/bin/env bash
+
+clear
+
+echo "============================================================"
+echo " OpenGL / Mesa Demos - EESSI"
+echo "============================================================"
+echo
+echo "Tool:"
+echo "  ${MESA_DEMO}"
+echo
+echo "EESSI module:"
+echo "  ${EESSI_MODULE:-unknown}"
+echo
+echo "Rendering mode:"
+echo "  ${RENDERING_MODE:-unknown}"
+echo
+echo "------------------------------------------------------------"
+echo
+
+"${MESA_DEMO_EXECUTABLE}"
+
+echo
+echo "------------------------------------------------------------"
+echo
+echo "Close this terminal to finish the OOD session."
+echo
+
+export PS1='[OpenGL/EESSI \u@\h \W]\$ '
+
+exec /bin/bash \
+    --noprofile \
+    --norc \
+    -i
+SHELL
+
+        chmod 700 "${INFO_SCRIPT}"
+
+        set +e
+
+        /usr/bin/xterm \
+            -T "${MESA_DEMO} - EESSI" \
+            -fa "Monospace" \
+            -fs 10 \
+            -e "${INFO_SCRIPT}" \
+            > "${SESSION_OUTPUT_DIR}/${MESA_DEMO}-terminal.log" 2>&1
+
+        RC=$?
+
+        set -e
+        ;;
+
+esac
+
+
+echo
+echo "${MESA_DEMO} exited with code: ${RC}"
+
+
+if [[ ${RC} -ne 0 ]]; then
+
+    echo
+    echo "OpenGL diagnostics:"
+    echo "------------------------------------------------------------"
+
+    cat "${SESSION_OUTPUT_DIR}/glxinfo-summary.log" \
+        2>/dev/null || true
+
+    echo "------------------------------------------------------------"
+
+fi
+
+exit "${RC}"

@@ -1,0 +1,17 @@
+title: "Jupyter Notebook - EESSI"
+
+description: >
+  Open OnDemand interactive JupyterNotebook application using
+  software provided by the EESSI software stack.
+
+software: "Jupyter"
+
+app_type: "batch-connect-basic"
+
+implementation_tags:
+  - "batch connect"
+  - "modules"
+
+maintainer:
+  name: "Do IT Now"
+  support_url: "ood@doitnowgroup.com"

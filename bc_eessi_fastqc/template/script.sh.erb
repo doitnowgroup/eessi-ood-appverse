@@ -1,0 +1,225 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?FastQC executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+: "${EBROOTX11:?EESSI X11 module is not loaded (EBROOTX11 is missing)}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+cd "${OOD_WD}"
+
+echo "============================================================"
+echo "Starting FastQC - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "EESSI release:     ${EESSI_VERSION:-unknown}"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "FastQC executable: ${APP_EXECUTABLE_PATH}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Preserve normal desktop resources
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+
+# ----------------------------------------------------------------------
+# Locate Java runtime
+# ----------------------------------------------------------------------
+
+JAVA_BIN="$(readlink -f "$(command -v java)")"
+
+if [[ -z "${JAVA_BIN}" || ! -x "${JAVA_BIN}" ]]; then
+    echo "ERROR: Java executable could not be resolved."
+    exit 1
+fi
+
+JAVA_HOME="$(dirname "$(dirname "${JAVA_BIN}")")"
+
+if [[ ! -d "${JAVA_HOME}" ]]; then
+    echo "ERROR: Java home does not exist:"
+    echo "  ${JAVA_HOME}"
+    exit 1
+fi
+
+if [[ ! -f "${JAVA_HOME}/lib/libawt_xawt.so" ]]; then
+    echo "ERROR: Java AWT library was not found:"
+    echo "  ${JAVA_HOME}/lib/libawt_xawt.so"
+    exit 1
+fi
+
+echo "Java executable:"
+echo "  ${JAVA_BIN}"
+
+echo "Java home:"
+echo "  ${JAVA_HOME}"
+
+echo "EESSI X11 root:"
+echo "  ${EBROOTX11}"
+
+
+# ----------------------------------------------------------------------
+# Build FastQC-specific library path
+# ----------------------------------------------------------------------
+#
+# FastQC uses Java AWT/Swing.
+#
+# Java's libawt_xawt.so requires X11 libraries such as:
+#
+#   libXext.so.6
+#   libXrender.so.1
+#   libXtst.so.6
+#   libXi.so.6
+#
+# These libraries are provided by the EESSI X11 module.
+#
+# IMPORTANT:
+# Do NOT add /usr/lib64 here. Mixing host libraries with the EESSI
+# compatibility environment can cause glibc/GLIBC_PRIVATE failures.
+#
+# Keep this library path scoped only to Java/FastQC.
+# ----------------------------------------------------------------------
+
+EESSI_X11_LIB="${EBROOTX11}/lib"
+
+if [[ ! -d "${EESSI_X11_LIB}" ]]; then
+    echo "ERROR: EESSI X11 library directory does not exist:"
+    echo "  ${EESSI_X11_LIB}"
+    exit 1
+fi
+
+FASTQC_LD_LIBRARY_PATH="${EESSI_X11_LIB}:${JAVA_HOME}/lib:${JAVA_HOME}/lib/server"
+
+if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
+    FASTQC_LD_LIBRARY_PATH="${FASTQC_LD_LIBRARY_PATH}:${LD_LIBRARY_PATH}"
+fi
+
+echo
+echo "FastQC library path:"
+echo "  ${FASTQC_LD_LIBRARY_PATH}"
+
+
+# ----------------------------------------------------------------------
+# Validate Java AWT dependencies
+# ----------------------------------------------------------------------
+
+echo
+echo "Checking Java AWT dependencies..."
+
+MISSING_AWT_LIBS="$(
+    LD_LIBRARY_PATH="${FASTQC_LD_LIBRARY_PATH}" \
+        ldd "${JAVA_HOME}/lib/libawt_xawt.so" 2>/dev/null |
+        awk '/not found/ {print $1}'
+)"
+
+if [[ -n "${MISSING_AWT_LIBS}" ]]; then
+
+    echo
+    echo "ERROR: Java AWT dependencies are missing:"
+    echo "${MISSING_AWT_LIBS}"
+    echo
+    echo "Java AWT library:"
+    echo "  ${JAVA_HOME}/lib/libawt_xawt.so"
+    echo
+    echo "EESSI X11 library directory:"
+    echo "  ${EESSI_X11_LIB}"
+
+    exit 1
+fi
+
+echo "Java AWT dependencies: OK"
+
+
+# ----------------------------------------------------------------------
+# Start window manager
+# ----------------------------------------------------------------------
+
+echo
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+cleanup() {
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT
+
+sleep 1
+
+if ! kill -0 "${WM_PID}" 2>/dev/null; then
+    echo "WARNING: Openbox exited immediately."
+    echo "See:"
+    echo "  ${SESSION_OUTPUT_DIR}/window-manager.log"
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch FastQC interactive GUI
+# ----------------------------------------------------------------------
+#
+# IMPORTANT:
+#
+# Do not provide sequence files here.
+#
+# Running:
+#
+#     fastqc
+#
+# starts the interactive Java GUI.
+#
+# Running:
+#
+#     fastqc sample.fastq
+#
+# triggers FastQC's non-interactive batch mode.
+# ----------------------------------------------------------------------
+
+echo
+echo "Launching FastQC interactive GUI..."
+
+set +e
+
+LD_LIBRARY_PATH="${FASTQC_LD_LIBRARY_PATH}" \
+    "${APP_EXECUTABLE_PATH}" \
+    > "${SESSION_OUTPUT_DIR}/fastqc.log" 2>&1
+
+FASTQC_EXIT_CODE=$?
+
+set -e
+
+echo
+echo "FastQC exited with code: ${FASTQC_EXIT_CODE}"
+
+if [[ ${FASTQC_EXIT_CODE} -ne 0 ]]; then
+
+    echo
+    echo "FastQC log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/fastqc.log" ]]; then
+        tail -n 100 "${SESSION_OUTPUT_DIR}/fastqc.log"
+    else
+        echo "FastQC log was not created."
+    fi
+
+    echo "------------------------------------------------------------"
+fi
+
+exit "${FASTQC_EXIT_CODE}"

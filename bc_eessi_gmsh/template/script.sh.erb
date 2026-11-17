@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Validate the environment prepared by the EESSI runtime.
+: "${APP_EXECUTABLE_PATH:?Gmsh executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+# Save the session directory for diagnostic logs.
+SESSION_OUTPUT_DIR="$PWD"
+
+cd "${OOD_WD}"
+
+echo "Starting Gmsh..."
+echo "EESSI module: ${EESSI_MODULE:-unknown}"
+echo "Executable: ${APP_EXECUTABLE_PATH}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY: ${DISPLAY}"
+
+# Start a lightweight X11 window manager.
+/usr/bin/openbox > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+trap 'kill "${WM_PID}" 2>/dev/null || true' EXIT
+
+# Launch the graphical application.
+"${APP_EXECUTABLE_PATH}"
+
+echo "Gmsh exited."

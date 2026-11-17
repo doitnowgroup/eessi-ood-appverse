@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${APP_EXECUTABLE_PATH:?jgmenu executable is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+MENU_FILE="${SESSION_OUTPUT_DIR}/jgmenu.csv"
+
+echo "======================================"
+echo "Starting jgmenu - EESSI"
+echo "======================================"
+
+echo "User: $(whoami)"
+echo "Module: ${EESSI_MODULE:-unknown}"
+echo "Executable: ${APP_EXECUTABLE_PATH}"
+echo "DISPLAY: ${DISPLAY}"
+
+# Make system fonts, icons and desktop assets available in addition
+# to anything supplied by the EESSI environment.
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+# ------------------------------------------------------------
+# Create a simple test menu
+# ------------------------------------------------------------
+
+cat > "${MENU_FILE}" <<'MENU'
+jgmenu - EESSI,^nop()
+sep()
+Open shell,/usr/bin/xterm -T "OOD shell" -e /bin/bash -l
+Exit,^quit()
+MENU
+
+echo "Menu definition:"
+cat "${MENU_FILE}"
+
+# ------------------------------------------------------------
+# Optional window manager
+# ------------------------------------------------------------
+
+WM_PID=""
+
+if [[ -x /usr/bin/openbox ]]; then
+
+    echo "Starting Openbox..."
+
+    /usr/bin/openbox \
+        > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+    WM_PID=$!
+
+    sleep 1
+
+    if ! kill -0 "${WM_PID}" 2>/dev/null; then
+        echo "WARNING: Openbox exited; continuing without a window manager."
+        WM_PID=""
+    fi
+fi
+
+cleanup() {
+    if [[ -n "${WM_PID}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT
+
+# ------------------------------------------------------------
+# Launch jgmenu
+# ------------------------------------------------------------
+
+echo "Launching jgmenu..."
+
+"${APP_EXECUTABLE_PATH}" \
+    --center \
+    --persistent \
+    --icon-size=0 \
+    --csv-file="${MENU_FILE}"

@@ -1,0 +1,22 @@
+---
+name: "FastQC - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "FastQC"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch FastQC using EESSI.
+  Perform interactive quality control analysis of high-throughput
+  sequencing data including FASTQ, BAM and SAM files.
+

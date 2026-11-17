@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?GNU Octave executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+echo "============================================================"
+echo "Starting GNU Octave - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "EESSI release:     ${EESSI_VERSION:-unknown}"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "Octave executable: ${APP_EXECUTABLE_PATH}"
+echo "Octave version:    ${OCTAVE_VERSION:-unknown}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Desktop / Qt environment
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+export QT_X11_NO_MITSHM="${QT_X11_NO_MITSHM:-1}"
+
+
+# ----------------------------------------------------------------------
+# User Octave directories
+# ----------------------------------------------------------------------
+
+mkdir -p "${HOME}/.config/octave"
+mkdir -p "${HOME}/.local/share/octave"
+
+if [[ ! -w "${HOME}/.config/octave" ]]; then
+    echo "ERROR: Octave configuration directory is not writable:"
+    echo "  ${HOME}/.config/octave"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+cleanup() {
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT
+
+sleep 1
+
+if ! kill -0 "${WM_PID}" 2>/dev/null; then
+    echo "WARNING: Openbox exited immediately."
+    echo "See:"
+    echo "  ${SESSION_OUTPUT_DIR}/window-manager.log"
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch GNU Octave GUI
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo
+echo "Launching GNU Octave GUI..."
+echo
+
+set +e
+
+"${APP_EXECUTABLE_PATH}" \
+    --gui \
+    > "${SESSION_OUTPUT_DIR}/octave.log" 2>&1
+
+OCTAVE_EXIT_CODE=$?
+
+set -e
+
+echo
+echo "GNU Octave exited with code: ${OCTAVE_EXIT_CODE}"
+
+if [[ ${OCTAVE_EXIT_CODE} -ne 0 ]]; then
+
+    echo
+    echo "Octave log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/octave.log" ]]; then
+        tail -n 150 "${SESSION_OUTPUT_DIR}/octave.log"
+    else
+        echo "Octave log was not created."
+    fi
+
+    echo "------------------------------------------------------------"
+fi
+
+exit "${OCTAVE_EXIT_CODE}"

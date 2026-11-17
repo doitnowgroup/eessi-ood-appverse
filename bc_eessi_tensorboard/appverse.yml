@@ -1,0 +1,17 @@
+title: "TensorBoard - EESSI"
+
+description: >
+  Open OnDemand interactive tensorboard application
+  using software provided by the EESSI software stack.
+
+software: "TensorBoard"
+
+app_type: "batch-connect-basic"
+
+implementation_tags:
+  - "batch connect"
+  - "modules"
+
+maintainer:
+  name: "Do IT Now"
+  support_url: "ood@doitnowgroup.com"

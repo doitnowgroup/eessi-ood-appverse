@@ -1,0 +1,17 @@
+title: "ImageMagick Display - EESSI"
+
+description: >
+  Open OnDemand interactive ImageMagick application
+  using software provided by the EESSI software stack.
+
+software: "ImageMagick Display"
+
+app_type: "batch-connect-vnc"
+
+implementation_tags:
+  - "batch connect"
+  - "modules"
+
+maintainer:
+  name: "Do IT Now"
+  support_url: "ood@doitnowgroup.com"

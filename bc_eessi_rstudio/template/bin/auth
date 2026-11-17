@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+# RStudio authentication helper.
+
+if [[ $# -lt 1 ]]; then
+    exit 1
+fi
+
+USERNAME="$1"
+
+if [[ -z "${RSTUDIO_PASSWORD:-}" ]]; then
+    exit 1
+fi
+
+# RStudio expects a password prompt from its PAM helper.
+read -s -p "Password: " PASSWORD
+echo ""
+
+if [[ "${USERNAME}" == "${USER}" &&
+      "${PASSWORD}" == "${RSTUDIO_PASSWORD}" ]]; then
+    exit 0
+fi
+
+exit 1

@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+echo "============================================================"
+echo "Starting JupyterLab - EESSI"
+echo "============================================================"
+echo "Time:        $(date)"
+echo "Host:        $(hostname)"
+echo "User:        ${USER}"
+echo "EESSI module: ${EESSI_MODULE}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Validate environment prepared by before.sh.erb
+# ----------------------------------------------------------------------
+
+if [[ -z "${APP_EXECUTABLE_PATH:-}" ]]; then
+    echo "ERROR: APP_EXECUTABLE_PATH is not defined."
+    echo "The EESSI runtime initialization may have failed."
+    exit 1
+fi
+
+if [[ ! -x "${APP_EXECUTABLE_PATH}" ]]; then
+    echo "ERROR: Application executable does not exist or is not executable:"
+    echo "  ${APP_EXECUTABLE_PATH}"
+    exit 1
+fi
+
+if [[ -z "${CONFIG_FILE:-}" || ! -f "${CONFIG_FILE}" ]]; then
+    echo "ERROR: Jupyter configuration file is missing:"
+    echo "  ${CONFIG_FILE:-not defined}"
+    exit 1
+fi
+
+if [[ -z "${OOD_WD:-}" || ! -d "${OOD_WD}" ]]; then
+    echo "ERROR: Working directory is invalid:"
+    echo "  ${OOD_WD:-not defined}"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Session-specific temporary directory
+# ----------------------------------------------------------------------
+
+TMPDIR="$(mktemp -d "/tmp/ood-jupyter-${USER}-XXXXXX")"
+export TMPDIR
+
+cleanup() {
+    rm -rf "${TMPDIR}"
+}
+
+trap cleanup EXIT
+
+
+# ----------------------------------------------------------------------
+# Start application
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo "Executable:"
+echo "  ${APP_EXECUTABLE_PATH}"
+
+echo "Configuration:"
+echo "  ${CONFIG_FILE}"
+
+echo "Working directory:"
+echo "  ${OOD_WD}"
+
+echo
+echo "TIMING - Starting JupyterLab - EESSI at: $(date)"
+echo "============================================================"
+
+set -x
+
+"${APP_EXECUTABLE_PATH}" \
+    --config="${CONFIG_FILE}" \
+    <%= context.extra_app_args %>

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${APP_EXECUTABLE_PATH:?Paraver executable is missing}"
+: "${OOD_WD:?Trace directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+cd "${OOD_WD}"
+
+echo "======================================"
+echo "Starting Paraver - EESSI"
+echo "======================================"
+
+echo "User: $(whoami)"
+echo "EESSI version: ${EESSI_VERSION:-unknown}"
+echo "Module: ${EESSI_MODULE:-unknown}"
+echo "Executable: ${APP_EXECUTABLE_PATH}"
+echo "Trace directory: ${OOD_WD}"
+echo "DISPLAY: ${DISPLAY}"
+
+# Preserve normal desktop resources in addition to EESSI paths.
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+# ------------------------------------------------------------
+# Start lightweight window manager
+# ------------------------------------------------------------
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+cleanup() {
+    kill "${WM_PID}" 2>/dev/null || true
+}
+
+trap cleanup EXIT
+
+sleep 1
+
+# ------------------------------------------------------------
+# Launch wxParaver
+# ------------------------------------------------------------
+
+echo "Launching wxParaver..."
+
+"${APP_EXECUTABLE_PATH}" \
+    > "${SESSION_OUTPUT_DIR}/paraver.log" 2>&1
+
+echo "Paraver exited."

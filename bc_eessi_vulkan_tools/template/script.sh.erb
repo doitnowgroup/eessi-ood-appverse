@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${VULKAN_TOOL:?Vulkan tool is missing}"
+: "${VULKAN_EXECUTABLE:?Vulkan executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+unset WAYLAND_DISPLAY || true
+
+
+echo "============================================================"
+echo "Vulkan Tools - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "Host:              $(hostname)"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "Tool:              ${VULKAN_TOOL}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+if [[ ! -x /usr/bin/openbox ]]; then
+    echo "ERROR: /usr/bin/openbox is unavailable."
+    exit 1
+fi
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+
+cleanup() {
+
+    echo
+    echo "Cleaning up Vulkan session..."
+
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT INT TERM
+
+sleep 1
+
+cd "${OOD_WD}"
+
+
+# ----------------------------------------------------------------------
+# Record Vulkan environment
+# ----------------------------------------------------------------------
+
+if command -v vulkaninfo >/dev/null 2>&1; then
+
+    vulkaninfo --summary \
+        > "${SESSION_OUTPUT_DIR}/vulkaninfo-summary.log" 2>&1 \
+        || true
+
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch selected tool
+# ----------------------------------------------------------------------
+
+case "${VULKAN_TOOL}" in
+
+    vkcube|vkcubepp)
+
+        echo "Launching ${VULKAN_TOOL}..."
+
+        set +e
+
+        "${VULKAN_EXECUTABLE}" \
+            > "${SESSION_OUTPUT_DIR}/${VULKAN_TOOL}.log" 2>&1
+
+        RC=$?
+
+        set -e
+        ;;
+
+
+    vulkaninfo)
+
+        if [[ ! -x /usr/bin/xterm ]]; then
+            echo "ERROR: /usr/bin/xterm is required for VulkanInfo."
+            exit 1
+        fi
+
+        INFO_SCRIPT="${SESSION_OUTPUT_DIR}/vulkaninfo-shell.sh"
+
+        cat > "${INFO_SCRIPT}" <<'SHELL'
+#!/usr/bin/env bash
+
+clear
+
+echo "============================================================"
+echo " VulkanInfo - EESSI"
+echo "============================================================"
+echo
+echo "Vulkan summary:"
+echo
+
+vulkaninfo --summary
+
+echo
+echo "------------------------------------------------------------"
+echo "Run 'vulkaninfo' for the complete report."
+echo "Close this terminal to finish the OOD session."
+echo
+
+export PS1='[Vulkan/EESSI \u@\h \W]\$ '
+
+exec /bin/bash \
+    --noprofile \
+    --norc \
+    -i
+SHELL
+
+        chmod 700 "${INFO_SCRIPT}"
+
+        set +e
+
+        /usr/bin/xterm \
+            -T "VulkanInfo - EESSI" \
+            -fa "Monospace" \
+            -fs 10 \
+            -e "${INFO_SCRIPT}" \
+            > "${SESSION_OUTPUT_DIR}/vulkaninfo-terminal.log" 2>&1
+
+        RC=$?
+
+        set -e
+        ;;
+
+esac
+
+
+echo
+echo "${VULKAN_TOOL} exited with code: ${RC}"
+
+
+if [[ ${RC} -ne 0 ]]; then
+
+    echo
+    echo "Vulkan diagnostics:"
+    echo "------------------------------------------------------------"
+
+    cat "${SESSION_OUTPUT_DIR}/vulkaninfo-summary.log" \
+      2>/dev/null || true
+
+    echo "------------------------------------------------------------"
+fi
+
+exit "${RC}"

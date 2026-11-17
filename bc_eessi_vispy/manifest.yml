@@ -1,0 +1,22 @@
+---
+name: "VisPy - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "VisPy"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch an interactive VisPy visualization environment using EESSI.
+  VisPy provides high-performance interactive 2D and 3D visualization
+  using OpenGL and can run custom Python visualization scripts.
+

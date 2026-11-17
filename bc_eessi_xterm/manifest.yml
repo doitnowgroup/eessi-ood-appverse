@@ -1,0 +1,21 @@
+---
+name: "xterm - EESSI"
+icon: icon.svg
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "xterm"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch an interactive xterm terminal using EESSI.
+  Access a graphical Bash shell through Open OnDemand.
+

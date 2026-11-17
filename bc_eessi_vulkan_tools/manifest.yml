@@ -1,0 +1,22 @@
+---
+name: "Vulkan Tools - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "Vulkan Tools"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch Vulkan development and diagnostic tools using EESSI.
+  Includes the VkCube graphical demos and VulkanInfo for inspecting
+  Vulkan devices, drivers, extensions and capabilities.
+

@@ -1,0 +1,19 @@
+---
+name: "RStudio Server - EESSI"
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "RStudio Server"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch RStudio Server using software provided by EESSI.
+

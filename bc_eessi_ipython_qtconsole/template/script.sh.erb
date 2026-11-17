@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?EESSI IPython executable is missing}"
+: "${QTCONSOLE_ENV:?QtConsole environment is missing}"
+: "${QTCONSOLE_EXECUTABLE:?QtConsole executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+echo "============================================================"
+echo "Starting IPython QtConsole - EESSI"
+echo "============================================================"
+echo "User:               $(whoami)"
+echo "Host:               $(hostname)"
+echo "EESSI release:      ${EESSI_VERSION:-unknown}"
+echo "EESSI module:       ${EESSI_MODULE:-unknown}"
+echo "IPython executable: ${APP_EXECUTABLE_PATH}"
+echo "IPython version:    ${IPYTHON_VERSION:-unknown}"
+echo "QtConsole env:      ${QTCONSOLE_ENV}"
+echo "QtConsole:          ${QTCONSOLE_EXECUTABLE}"
+echo "QtConsole version:  ${QTCONSOLE_VERSION:-unknown}"
+echo "Working directory:  ${OOD_WD}"
+echo "DISPLAY:            ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Desktop / X11 / Qt environment
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+export QT_X11_NO_MITSHM="${QT_X11_NO_MITSHM:-1}"
+
+# Avoid Qt trying to use Wayland inside the VNC session.
+unset WAYLAND_DISPLAY || true
+
+
+# ----------------------------------------------------------------------
+# User configuration directories
+# ----------------------------------------------------------------------
+
+mkdir -p \
+    "${HOME}/.ipython" \
+    "${HOME}/.jupyter" \
+    "${HOME}/.local/share/jupyter" \
+    "${HOME}/.cache"
+
+if [[ ! -w "${HOME}/.ipython" ]]; then
+    echo "ERROR: IPython configuration directory is not writable:"
+    echo "  ${HOME}/.ipython"
+    exit 1
+fi
+
+if [[ ! -w "${HOME}/.jupyter" ]]; then
+    echo "ERROR: Jupyter configuration directory is not writable:"
+    echo "  ${HOME}/.jupyter"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Validate EESSI / QtConsole runtime
+# ----------------------------------------------------------------------
+
+echo "Validating EESSI IPython..."
+
+if [[ ! -x "${APP_EXECUTABLE_PATH}" ]]; then
+    echo "ERROR: EESSI IPython executable does not exist:"
+    echo "  ${APP_EXECUTABLE_PATH}"
+    exit 1
+fi
+
+echo "Validating QtConsole..."
+
+if [[ ! -x "${QTCONSOLE_EXECUTABLE}" ]]; then
+    echo "ERROR: QtConsole executable does not exist:"
+    echo "  ${QTCONSOLE_EXECUTABLE}"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Runtime diagnostics
+# ----------------------------------------------------------------------
+
+echo
+echo "Runtime diagnostics"
+echo "------------------------------------------------------------"
+
+echo "EESSI IPython:"
+"${APP_EXECUTABLE_PATH}" --version || true
+
+echo
+echo "QtConsole:"
+"${QTCONSOLE_ENV}/bin/python" - <<'PY' || true
+import sys
+
+print("Python executable:", sys.executable)
+print("Python version:", sys.version.replace("\n", " "))
+
+try:
+    import IPython
+    print("IPython:", IPython.__version__)
+    print("IPython path:", IPython.__file__)
+except Exception as exc:
+    print("IPython ERROR:", repr(exc))
+
+try:
+    import ipykernel
+    print("ipykernel:", ipykernel.__version__)
+except Exception as exc:
+    print("ipykernel ERROR:", repr(exc))
+
+try:
+    import jupyter_client
+    print("jupyter_client:", jupyter_client.__version__)
+except Exception as exc:
+    print("jupyter_client ERROR:", repr(exc))
+
+try:
+    import qtconsole
+    print("qtconsole:", qtconsole.__version__)
+    print("qtconsole path:", qtconsole.__file__)
+except Exception as exc:
+    print("qtconsole ERROR:", repr(exc))
+
+try:
+    import qtpy
+    print("qtpy:", qtpy.__version__)
+except Exception as exc:
+    print("qtpy ERROR:", repr(exc))
+
+try:
+    from PyQt5 import QtCore
+    print("Qt version:", QtCore.QT_VERSION_STR)
+    print("PyQt version:", QtCore.PYQT_VERSION_STR)
+except Exception as exc:
+    print("PyQt5 ERROR:", repr(exc))
+PY
+
+echo "------------------------------------------------------------"
+echo
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+echo "Starting Openbox..."
+
+if [[ ! -x /usr/bin/openbox ]]; then
+    echo "ERROR: Openbox is not installed:"
+    echo "  /usr/bin/openbox"
+    exit 1
+fi
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+cleanup() {
+
+    echo
+    echo "Cleaning up IPython QtConsole session..."
+
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT INT TERM
+
+sleep 1
+
+if ! kill -0 "${WM_PID}" 2>/dev/null; then
+
+    echo "WARNING: Openbox exited immediately."
+    echo
+    echo "Openbox log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/window-manager.log" ]]; then
+        cat "${SESSION_OUTPUT_DIR}/window-manager.log"
+    else
+        echo "Openbox log was not created."
+    fi
+
+    echo "------------------------------------------------------------"
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch IPython QtConsole
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo
+echo "Launching IPython QtConsole..."
+echo "Working directory:"
+echo "  $(pwd)"
+echo
+
+#
+# Do not activate the virtual environment here.
+#
+# QTCONSOLE_EXECUTABLE already points directly to the managed
+# QtConsole executable:
+#
+#   /opt/ood-apps/ipython-qtconsole/bin/jupyter-qtconsole
+#
+# The EESSI environment loaded by before.sh remains active and provides
+# IPython, ipykernel, jupyter_client and PyQt5.
+#
+
+set +e
+
+"${QTCONSOLE_EXECUTABLE}" \
+    --JupyterConsoleApp.confirm_exit=False \
+    > "${SESSION_OUTPUT_DIR}/ipython-qtconsole.log" 2>&1
+
+QTCONSOLE_EXIT_CODE=$?
+
+set -e
+
+
+# ----------------------------------------------------------------------
+# Exit diagnostics
+# ----------------------------------------------------------------------
+
+echo
+echo "IPython QtConsole exited with code: ${QTCONSOLE_EXIT_CODE}"
+
+if [[ ${QTCONSOLE_EXIT_CODE} -ne 0 ]]; then
+
+    echo
+    echo "QtConsole log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/ipython-qtconsole.log" ]]; then
+        tail -n 200 "${SESSION_OUTPUT_DIR}/ipython-qtconsole.log"
+    else
+        echo "QtConsole log was not created."
+    fi
+
+    echo "------------------------------------------------------------"
+fi
+
+exit "${QTCONSOLE_EXIT_CODE}"

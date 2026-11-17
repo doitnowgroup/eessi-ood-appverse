@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# ------------------------------------------------------------
+# Validate environment
+# ------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?xterm executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+if [[ ! -x "${APP_EXECUTABLE_PATH}" ]]; then
+    echo "ERROR: xterm executable is not accessible."
+    exit 1
+fi
+
+cd "${OOD_WD}"
+
+echo "======================================"
+echo "Starting xterm - EESSI"
+echo "======================================"
+
+echo "User: $(whoami)"
+echo "Module: ${EESSI_MODULE:-unknown}"
+echo "Executable: ${APP_EXECUTABLE_PATH}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY: ${DISPLAY}"
+
+# ------------------------------------------------------------
+# Make system themes available to Openbox
+# ------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+# ------------------------------------------------------------
+# Start Openbox
+# ------------------------------------------------------------
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+trap 'kill "${WM_PID}" 2>/dev/null || true' EXIT
+
+# ------------------------------------------------------------
+# Launch EESSI xterm
+# ------------------------------------------------------------
+
+echo "Launching xterm..."
+
+"${APP_EXECUTABLE_PATH}" \
+    -T "xterm - EESSI" \
+    -geometry 110x34 \
+    -e /bin/bash -i \
+    2> "${SESSION_OUTPUT_DIR}/xterm.log"
+
+echo "xterm session finished."

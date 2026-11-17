@@ -1,0 +1,168 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+
+# ----------------------------------------------------------------------
+# Validate session environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?Graphviz GUI executable is missing}"
+: "${DOT_EXECUTABLE:?Graphviz dot executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+
+echo "============================================================"
+echo "Starting Graphviz - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "Host:              $(hostname)"
+echo "EESSI release:     ${EESSI_VERSION:-unknown}"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "Graphviz version:  ${GRAPHVIZ_VERSION:-unknown}"
+echo "Graphviz editor:   ${APP_EXECUTABLE_PATH}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# X11 / Qt environment
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+export QT_X11_NO_MITSHM="${QT_X11_NO_MITSHM:-1}"
+
+unset WAYLAND_DISPLAY || true
+
+
+# ----------------------------------------------------------------------
+# Validate Graphviz
+# ----------------------------------------------------------------------
+
+echo "Graphviz diagnostics"
+echo "------------------------------------------------------------"
+
+"${DOT_EXECUTABLE}" -V 2>&1 || true
+
+echo
+echo "Available Graphviz layout engines:"
+
+for engine in dot neato fdp sfdp circo twopi; do
+
+    if [[ -x "${GRAPHVIZ_BIN_DIR}/${engine}" ]]; then
+        echo "  ${engine}"
+    fi
+
+done
+
+echo "------------------------------------------------------------"
+echo
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+if [[ ! -x /usr/bin/openbox ]]; then
+    echo "ERROR: Openbox is not available:"
+    echo "  /usr/bin/openbox"
+    exit 1
+fi
+
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+
+cleanup() {
+
+    echo
+    echo "Cleaning up Graphviz session..."
+
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+
+}
+
+trap cleanup EXIT INT TERM
+
+sleep 1
+
+
+if ! kill -0 "${WM_PID}" 2>/dev/null; then
+
+    echo "WARNING: Openbox exited immediately."
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/window-manager.log" ]]; then
+
+        echo
+        cat "${SESSION_OUTPUT_DIR}/window-manager.log"
+
+    fi
+
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch Graphviz
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo
+echo "Launching Graphviz..."
+
+set +e
+
+if [[ -n "${GRAPHVIZ_FILE:-}" ]]; then
+
+    echo "Opening:"
+    echo "  ${GRAPHVIZ_FILE}"
+
+    "${APP_EXECUTABLE_PATH}" \
+        "${GRAPHVIZ_FILE}" \
+        > "${SESSION_OUTPUT_DIR}/graphviz.log" 2>&1
+
+else
+
+    "${APP_EXECUTABLE_PATH}" \
+        > "${SESSION_OUTPUT_DIR}/graphviz.log" 2>&1
+
+fi
+
+GRAPHVIZ_EXIT_CODE=$?
+
+set -e
+
+
+echo
+echo "Graphviz exited with code: ${GRAPHVIZ_EXIT_CODE}"
+
+if [[ ${GRAPHVIZ_EXIT_CODE} -ne 0 ]]; then
+
+    echo
+    echo "Graphviz log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/graphviz.log" ]]; then
+        tail -n 200 \
+            "${SESSION_OUTPUT_DIR}/graphviz.log"
+    else
+        echo "Graphviz log was not created."
+    fi
+
+    echo "------------------------------------------------------------"
+
+fi
+
+exit "${GRAPHVIZ_EXIT_CODE}"

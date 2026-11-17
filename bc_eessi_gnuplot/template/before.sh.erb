@@ -1,0 +1,371 @@
+# ----------------------------------------------------------------------
+# Generic EESSI runtime initialization
+# ----------------------------------------------------------------------
+#
+# This fragment is rendered by generate_apps.py into each application's
+# before.sh.erb file.
+#
+# Jinja2 resolves at generation time:
+#
+#   gnuplot - EESSI
+#   gnuplot
+#   2025.06
+#
+# Open OnDemand resolves at session staging time:
+#
+#   <%= context.eessi_module.to_s %>
+#
+# Examples:
+#
+#   Gmsh
+#     -> EESSI 2025.06
+#
+#   Paraver
+#     -> EESSI 2023.06
+#
+# Important:
+#   APP_EESSI_* variables contain the application configuration and must
+#   survive any cleanup of an inherited module environment.
+# ----------------------------------------------------------------------
+
+
+# ----------------------------------------------------------------------
+# Application configuration
+# ----------------------------------------------------------------------
+
+APP_NAME="gnuplot - EESSI"
+APP_EXECUTABLE="gnuplot"
+
+# Keep the requested EESSI configuration separate from variables that
+# may be managed/unset by an already-loaded EESSI module.
+# Load optional site-wide or per-app environment overrides
+for _eessi_env_file in "/etc/default/eessi-ood" "/etc/ood/config/apps/bc_eessi_gnuplot/env"; do
+    if [[ -r "${_eessi_env_file}" ]]; then
+        # shellcheck disable=SC1090
+        source "${_eessi_env_file}"
+    fi
+done
+unset _eessi_env_file
+
+APP_EESSI_ROOT="${EESSI_ROOT:-/cvmfs/software.eessi.io}"
+APP_EESSI_VERSION="${EESSI_VERSION_OVERRIDE:-<%= context.respond_to?(:eessi_version) && !context.eessi_version.blank? ? context.eessi_version.to_s : '2025.06' %>}"
+
+# Module selected through the Open OnDemand application form.
+#
+# respond_to? prevents template staging from failing if an application
+# uses a pinned module and does not expose eessi_module in its form.
+APP_EESSI_MODULE="<%= context.respond_to?(:eessi_module) ? context.eessi_module.to_s : "" %>"
+
+
+APP_EESSI_MODULE_DEFAULT=""
+
+
+# Use the configured module as a fallback when the form does not supply one.
+if [[ -z "${APP_EESSI_MODULE}" && -n "${APP_EESSI_MODULE_DEFAULT}" ]]; then
+    APP_EESSI_MODULE="${APP_EESSI_MODULE_DEFAULT}"
+fi
+
+EESSI_INIT="${APP_EESSI_ROOT}/versions/${APP_EESSI_VERSION}/init/lmod/bash"
+
+export APP_NAME
+export APP_EXECUTABLE
+export APP_EESSI_ROOT
+export APP_EESSI_VERSION
+export APP_EESSI_MODULE
+export EESSI_INIT
+
+
+# ----------------------------------------------------------------------
+# Validate application configuration
+# ----------------------------------------------------------------------
+
+if [[ -z "${APP_NAME}" ]]; then
+    echo "ERROR: No application name was configured."
+    exit 1
+fi
+
+if [[ -z "${APP_EXECUTABLE}" ]]; then
+    echo "ERROR: No executable is configured for ${APP_NAME}."
+    exit 1
+fi
+
+if [[ -z "${APP_EESSI_VERSION}" ]]; then
+    echo "ERROR: No EESSI version is configured for ${APP_NAME}."
+    exit 1
+fi
+
+if [[ -z "${APP_EESSI_MODULE}" ]]; then
+    echo "ERROR: No EESSI module was selected."
+    echo
+    echo "Application:"
+    echo "  ${APP_NAME}"
+    echo
+    echo "EESSI release:"
+    echo "  ${APP_EESSI_VERSION}"
+    echo
+    echo "Please select an application version in the Open OnDemand form."
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Runtime information
+# ----------------------------------------------------------------------
+
+echo "============================================================"
+echo "EESSI application runtime"
+echo "============================================================"
+echo "Application:    ${APP_NAME}"
+echo "Host:           $(hostname -f 2>/dev/null || hostname)"
+echo "User:           $(whoami)"
+echo "EESSI root:     ${APP_EESSI_ROOT}"
+echo "EESSI version:  ${APP_EESSI_VERSION}"
+echo "EESSI module:   ${APP_EESSI_MODULE}"
+echo "Executable:     ${APP_EXECUTABLE}"
+echo "Initialization: ${EESSI_INIT}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Validate EESSI / CVMFS availability
+# ----------------------------------------------------------------------
+
+if [[ ! -d "${APP_EESSI_ROOT}" ]]; then
+    echo "ERROR: EESSI CVMFS root is not available."
+    echo
+    echo "Expected:"
+    echo "  ${APP_EESSI_ROOT}"
+    echo
+    echo "Host:"
+    echo "  $(hostname -f 2>/dev/null || hostname)"
+    exit 1
+fi
+
+if [[ ! -d "${APP_EESSI_ROOT}/versions/${APP_EESSI_VERSION}" ]]; then
+    echo "ERROR: EESSI release ${APP_EESSI_VERSION} is not available."
+    echo
+    echo "Expected release directory:"
+    echo "  ${APP_EESSI_ROOT}/versions/${APP_EESSI_VERSION}"
+    exit 1
+fi
+
+if [[ ! -r "${EESSI_INIT}" ]]; then
+    echo "ERROR: EESSI initialization script is unavailable."
+    echo
+    echo "Expected:"
+    echo "  ${EESSI_INIT}"
+    echo
+    echo "Application:"
+    echo "  ${APP_NAME}"
+    echo
+    echo "Required EESSI release:"
+    echo "  ${APP_EESSI_VERSION}"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Clean inherited module environment
+# ----------------------------------------------------------------------
+#
+# IMPORTANT:
+#
+# This must happen BEFORE sourcing the requested EESSI release.
+#
+# Running "module purge" after EESSI initialization can unload the
+# EESSI/<version> module itself, remove its MODULEPATH configuration,
+# and make application modules such as Paraver unavailable.
+#
+# APP_EESSI_* variables are deliberately used here because an inherited
+# EESSI module may unset EESSI_VERSION/EESSI_ROOT while being unloaded.
+# ----------------------------------------------------------------------
+
+echo "Cleaning inherited module environment..."
+
+if type module >/dev/null 2>&1; then
+
+    if ! module purge >/dev/null 2>&1; then
+        echo "WARNING: Unable to completely purge inherited modules."
+        echo "Continuing with explicit EESSI initialization."
+    fi
+
+else
+
+    echo "No existing module environment detected."
+
+fi
+
+
+# ----------------------------------------------------------------------
+# Initialize selected EESSI release
+# ----------------------------------------------------------------------
+
+echo
+echo "Initializing EESSI ${APP_EESSI_VERSION}..."
+
+# shellcheck disable=SC1090
+if ! source "${EESSI_INIT}"; then
+    echo
+    echo "ERROR: Failed to initialize EESSI ${APP_EESSI_VERSION}."
+    echo
+    echo "Initialization script:"
+    echo "  ${EESSI_INIT}"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Validate Lmod
+# ----------------------------------------------------------------------
+
+if ! type module >/dev/null 2>&1; then
+    echo
+    echo "ERROR: Lmod was not initialized correctly."
+    echo
+    echo "The 'module' command is unavailable after sourcing:"
+    echo "  ${EESSI_INIT}"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Restore canonical application EESSI variables
+# ----------------------------------------------------------------------
+#
+# EESSI's initialization/modulefiles may manage variables with these
+# names themselves. Re-export the values selected for this application
+# so that subsequent application scripts have a stable interface.
+# ----------------------------------------------------------------------
+
+EESSI_ROOT="${APP_EESSI_ROOT}"
+EESSI_VERSION="${APP_EESSI_VERSION}"
+EESSI_MODULE="${APP_EESSI_MODULE}"
+
+export EESSI_ROOT
+export EESSI_VERSION
+export EESSI_MODULE
+
+
+# ----------------------------------------------------------------------
+# Validate initialized release
+# ----------------------------------------------------------------------
+
+echo
+echo "EESSI initialization completed."
+echo
+echo "Configured release:"
+echo "  ${EESSI_VERSION}"
+echo
+echo "Current module environment:"
+module list 2>&1 || true
+echo
+
+
+# ----------------------------------------------------------------------
+# Load selected application module
+# ----------------------------------------------------------------------
+
+echo "Loading EESSI module:"
+echo "  ${EESSI_MODULE}"
+
+if ! module load "${EESSI_MODULE}"; then
+    echo
+    echo "ERROR: Failed to load EESSI module:"
+    echo "  ${EESSI_MODULE}"
+    echo
+    echo "EESSI release:"
+    echo "  ${EESSI_VERSION}"
+    echo
+    echo "Host:"
+    echo "  $(hostname -f 2>/dev/null || hostname)"
+    echo
+    echo "Possible causes:"
+    echo "  - the module does not exist in EESSI ${EESSI_VERSION}"
+    echo "  - the module is unavailable for this CPU architecture"
+    echo "  - the EESSI installation is incomplete on this node"
+    echo "  - the generated catalogue and runtime release do not match"
+    exit 1
+fi
+
+
+# ----------------------------------------------------------------------
+# Resolve application executable
+# ----------------------------------------------------------------------
+
+APP_EXECUTABLE_PATH="$(command -v "${APP_EXECUTABLE}" 2>/dev/null || true)"
+
+if [[ -z "${APP_EXECUTABLE_PATH}" ]]; then
+    echo
+    echo "ERROR: Executable '${APP_EXECUTABLE}' was not found."
+    echo
+    echo "Loaded module:"
+    echo "  ${EESSI_MODULE}"
+    echo
+    echo "EESSI release:"
+    echo "  ${EESSI_VERSION}"
+    exit 1
+fi
+
+if [[ ! -x "${APP_EXECUTABLE_PATH}" ]]; then
+    echo
+    echo "ERROR: Resolved executable is not executable:"
+    echo "  ${APP_EXECUTABLE_PATH}"
+    exit 1
+fi
+
+export APP_EXECUTABLE_PATH
+
+
+# ----------------------------------------------------------------------
+# Final runtime summary
+# ----------------------------------------------------------------------
+
+echo
+echo "============================================================"
+echo "EESSI environment initialized successfully"
+echo "============================================================"
+echo "Application:         ${APP_NAME}"
+echo "EESSI release:       ${EESSI_VERSION}"
+echo "Selected module:     ${EESSI_MODULE}"
+echo "Resolved executable: ${APP_EXECUTABLE_PATH}"
+echo
+echo "Loaded modules:"
+module list 2>&1
+echo
+echo "============================================================"
+
+
+<% require 'shellwords' %>
+
+# ------------------------------------------------------------
+# Verify gnuplot
+# ------------------------------------------------------------
+
+echo "Preparing ${APP_NAME} session..."
+
+if [[ -z "${APP_EXECUTABLE_PATH:-}" ]]; then
+    echo "ERROR: gnuplot executable was not initialized."
+    exit 1
+fi
+
+echo "EESSI module: ${EESSI_MODULE}"
+echo "gnuplot executable: ${APP_EXECUTABLE_PATH}"
+
+# ------------------------------------------------------------
+# Working directory
+# ------------------------------------------------------------
+
+<%- if context.working_dir.blank? -%>
+OOD_WD="$HOME"
+<%- else -%>
+OOD_WD=<%= Shellwords.escape(context.working_dir.to_s) %>
+<%- end -%>
+
+if [[ ! -d "${OOD_WD}" ]]; then
+    echo "ERROR: Working directory does not exist: ${OOD_WD}"
+    exit 1
+fi
+
+export OOD_WD
+
+echo "Working directory: ${OOD_WD}"

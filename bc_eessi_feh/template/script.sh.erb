@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# ------------------------------------------------------------
+# Validate environment
+# ------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?feh executable is missing}"
+: "${OOD_WD:?Image directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+if [[ ! -d "${OOD_WD}" ]]; then
+    echo "ERROR: Image directory does not exist: ${OOD_WD}"
+    exit 1
+fi
+
+# ------------------------------------------------------------
+# Verify images exist
+# ------------------------------------------------------------
+
+if ! find "${OOD_WD}" -type f \
+    \( -iname '*.png' \
+    -o -iname '*.jpg' \
+    -o -iname '*.jpeg' \
+    -o -iname '*.gif' \
+    -o -iname '*.bmp' \) \
+    -print -quit | grep -q .; then
+
+    echo "ERROR: No supported image candidates found in ${OOD_WD}"
+    exit 1
+fi
+
+echo "======================================"
+echo "Starting feh - EESSI"
+echo "======================================"
+
+echo "Module: ${EESSI_MODULE:-unknown}"
+echo "Executable: ${APP_EXECUTABLE_PATH}"
+echo "Image directory: ${OOD_WD}"
+echo "DISPLAY: ${DISPLAY}"
+
+# ------------------------------------------------------------
+# Start window manager
+# ------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+trap 'kill "${WM_PID}" 2>/dev/null || true' EXIT
+
+# ------------------------------------------------------------
+# Launch feh
+# ------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+"${APP_EXECUTABLE_PATH}" \
+    --recursive \
+    --scale-down \
+    --draw-filename \
+    -- "${OOD_WD}"
+
+echo "feh exited."

@@ -1,0 +1,197 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?Valgrind executable is missing}"
+: "${VALGRIND_VERSION:?Valgrind version is missing}"
+: "${VALGRIND_TOOL:?Valgrind tool is missing}"
+: "${XTERM_EXECUTABLE:?xterm executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+
+echo "============================================================"
+echo "Starting Valgrind - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "Host:              $(hostname)"
+echo "EESSI release:     ${EESSI_VERSION:-unknown}"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "Valgrind:          ${VALGRIND_VERSION}"
+echo "Default tool:      ${VALGRIND_TOOL}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Desktop environment
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+unset WAYLAND_DISPLAY || true
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+if [[ ! -x /usr/bin/openbox ]]; then
+    echo "ERROR: Openbox is not installed:"
+    echo "  /usr/bin/openbox"
+    exit 1
+fi
+
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+
+cleanup() {
+
+    echo
+    echo "Cleaning up Valgrind session..."
+
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+
+}
+
+trap cleanup EXIT INT TERM
+
+sleep 1
+
+
+# ----------------------------------------------------------------------
+# Create interactive Valgrind shell
+# ----------------------------------------------------------------------
+
+VALGRIND_SHELL="${SESSION_OUTPUT_DIR}/valgrind-shell.sh"
+
+cat > "${VALGRIND_SHELL}" <<'SHELL'
+#!/usr/bin/env bash
+
+clear
+
+echo "============================================================"
+echo " Valgrind - EESSI"
+echo "============================================================"
+echo
+echo "Valgrind version:"
+echo "  ${VALGRIND_VERSION}"
+echo
+echo "EESSI module:"
+echo "  ${EESSI_MODULE:-unknown}"
+echo
+echo "Working directory:"
+echo "  ${OOD_WD}"
+echo
+echo "Selected default tool:"
+echo "  ${VALGRIND_TOOL}"
+echo
+echo "Example:"
+echo
+echo "  valgrind --tool=${VALGRIND_TOOL} ./your_program"
+echo
+
+if [[ "${VALGRIND_TOOL}" == "memcheck" ]]; then
+
+    echo "Common Memcheck example:"
+    echo
+    echo "  valgrind --tool=memcheck --leak-check=full ./your_program"
+    echo
+
+elif [[ "${VALGRIND_TOOL}" == "massif" ]]; then
+
+    echo "Common Massif example:"
+    echo
+    echo "  valgrind --tool=massif ./your_program"
+    echo "  ms_print massif.out.<PID>"
+    echo
+
+elif [[ "${VALGRIND_TOOL}" == "callgrind" ]]; then
+
+    echo "Common Callgrind example:"
+    echo
+    echo "  valgrind --tool=callgrind ./your_program"
+    echo
+
+fi
+
+echo "Useful commands:"
+echo
+echo "  valgrind --help"
+echo "  valgrind --tool=${VALGRIND_TOOL} --help"
+echo
+echo "Close this terminal to end the OOD session."
+echo
+echo "============================================================"
+echo
+
+cd "${OOD_WD}"
+
+export PS1='[Valgrind/EESSI \u@\h \W]\$ '
+
+exec /bin/bash \
+    --noprofile \
+    --norc \
+    -i
+SHELL
+
+chmod 700 "${VALGRIND_SHELL}"
+
+
+# ----------------------------------------------------------------------
+# Launch terminal
+# ----------------------------------------------------------------------
+
+echo
+echo "Launching Valgrind terminal..."
+
+set +e
+
+"${XTERM_EXECUTABLE}" \
+    -T "Valgrind - EESSI" \
+    -fa "Monospace" \
+    -fs 11 \
+    -e "${VALGRIND_SHELL}" \
+    > "${SESSION_OUTPUT_DIR}/valgrind-terminal.log" 2>&1
+
+XTERM_EXIT_CODE=$?
+
+set -e
+
+
+echo
+echo "Valgrind terminal exited with code: ${XTERM_EXIT_CODE}"
+
+if [[ ${XTERM_EXIT_CODE} -ne 0 ]]; then
+
+    echo
+    echo "Terminal log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/valgrind-terminal.log" ]]; then
+        tail -n 200 \
+            "${SESSION_OUTPUT_DIR}/valgrind-terminal.log"
+    else
+        echo "Terminal log was not created."
+    fi
+
+    echo "------------------------------------------------------------"
+
+fi
+
+exit "${XTERM_EXIT_CODE}"

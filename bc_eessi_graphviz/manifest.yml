@@ -1,0 +1,22 @@
+---
+name: "Graphviz - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "Graphviz"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch the Graphviz graphical editor and viewer using EESSI.
+  Graphviz provides tools for visualising graphs and networks,
+  including dot, neato, fdp, circo, sfdp and gvedit.
+

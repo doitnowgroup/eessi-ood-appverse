@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+: "${APP_EXECUTABLE_PATH:?Python executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+export QT_X11_NO_MITSHM="${QT_X11_NO_MITSHM:-1}"
+
+unset WAYLAND_DISPLAY || true
+
+
+echo "============================================================"
+echo "VisPy - EESSI"
+echo "============================================================"
+echo "User:              $(whoami)"
+echo "Host:              $(hostname)"
+echo "EESSI module:      ${EESSI_MODULE:-unknown}"
+echo "VisPy version:     ${VISPY_VERSION:-unknown}"
+echo "Rendering mode:    ${RENDERING_MODE:-unknown}"
+echo "Working directory: ${OOD_WD}"
+echo "DISPLAY:           ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+if [[ ! -x /usr/bin/openbox ]]; then
+    echo "ERROR: Openbox is unavailable:"
+    echo "  /usr/bin/openbox"
+    exit 1
+fi
+
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+
+cleanup() {
+
+    echo
+    echo "Cleaning up VisPy session..."
+
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT INT TERM
+
+sleep 1
+
+cd "${OOD_WD}"
+
+
+# ----------------------------------------------------------------------
+# Launch user-provided script
+# ----------------------------------------------------------------------
+
+if [[ -n "${VISPY_SCRIPT:-}" ]]; then
+
+    echo "Launching VisPy script:"
+    echo "  ${VISPY_SCRIPT}"
+
+    set +e
+
+    "${APP_EXECUTABLE_PATH}" \
+        "${VISPY_SCRIPT}" \
+        > "${SESSION_OUTPUT_DIR}/vispy.log" 2>&1
+
+    RC=$?
+
+    set -e
+
+
+# ----------------------------------------------------------------------
+# Otherwise launch built-in demonstration
+# ----------------------------------------------------------------------
+
+else
+
+    DEMO_SCRIPT="${SESSION_OUTPUT_DIR}/vispy-demo.py"
+
+    cat > "${DEMO_SCRIPT}" <<'PY'
+import sys
+import numpy as np
+
+from vispy import app, scene
+
+
+# Explicit Qt backend
+app.use_app("pyqt6")
+
+
+# ------------------------------------------------------------------
+# Generate an interactive 3-D point cloud
+# ------------------------------------------------------------------
+
+rng = np.random.default_rng(42)
+
+n_points = 10000
+
+positions = rng.normal(
+    size=(n_points, 3)
+).astype(np.float32)
+
+
+colours = np.empty(
+    (n_points, 4),
+    dtype=np.float32
+)
+
+for axis in range(3):
+
+    values = positions[:, axis]
+
+    colours[:, axis] = (
+        values - values.min()
+    ) / (
+        values.max() - values.min()
+    )
+
+colours[:, 3] = 1.0
+
+
+# ------------------------------------------------------------------
+# Create VisPy canvas
+# ------------------------------------------------------------------
+
+canvas = scene.SceneCanvas(
+    title="VisPy - EESSI",
+    keys="interactive",
+    size=(1000, 750),
+    bgcolor="#202020",
+    show=True,
+)
+
+view = canvas.central_widget.add_view()
+
+
+markers = scene.visuals.Markers(
+    parent=view.scene
+)
+
+markers.set_data(
+    positions,
+    face_color=colours,
+    edge_width=0,
+    size=5,
+)
+
+
+scene.visuals.XYZAxis(
+    parent=view.scene
+)
+
+
+view.camera = "turntable"
+view.camera.fov = 45
+view.camera.distance = 8
+
+
+print("VisPy interactive demo started.")
+print("Use the mouse to rotate and zoom.")
+print("Close the window to finish the OOD session.")
+
+
+if __name__ == "__main__" and sys.flags.interactive == 0:
+    app.run()
+PY
+
+
+    echo "Launching built-in VisPy demonstration..."
+
+    set +e
+
+    "${APP_EXECUTABLE_PATH}" \
+        "${DEMO_SCRIPT}" \
+        > "${SESSION_OUTPUT_DIR}/vispy.log" 2>&1
+
+    RC=$?
+
+    set -e
+
+fi
+
+
+echo
+echo "VisPy exited with code: ${RC}"
+
+
+if [[ ${RC} -ne 0 ]]; then
+
+    echo
+    echo "VisPy log:"
+    echo "------------------------------------------------------------"
+
+    tail -n 200 \
+      "${SESSION_OUTPUT_DIR}/vispy.log" \
+      2>/dev/null || true
+
+    echo "------------------------------------------------------------"
+
+fi
+
+exit "${RC}"

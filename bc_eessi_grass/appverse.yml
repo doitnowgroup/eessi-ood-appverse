@@ -1,0 +1,17 @@
+title: "GRASS GIS - EESSI"
+
+description: >
+  Open OnDemand interactive GRASS application
+  using software provided by the EESSI software stack.
+
+software: "GRASS GIS"
+
+app_type: "batch-connect-vnc"
+
+implementation_tags:
+  - "batch connect"
+  - "modules"
+
+maintainer:
+  name: "Do IT Now"
+  support_url: "ood@doitnowgroup.com"

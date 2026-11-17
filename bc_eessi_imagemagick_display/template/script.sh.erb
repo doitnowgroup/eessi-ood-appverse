@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?ImageMagick Display executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${DISPLAY:?VNC display is missing}"
+
+SESSION_OUTPUT_DIR="$PWD"
+
+echo "============================================================"
+echo "Starting ImageMagick Display - EESSI"
+echo "============================================================"
+echo "User:                $(whoami)"
+echo "EESSI release:       ${EESSI_VERSION:-unknown}"
+echo "EESSI module:        ${EESSI_MODULE:-unknown}"
+echo "Display executable:  ${APP_EXECUTABLE_PATH}"
+echo "ImageMagick version: ${IMAGEMAGICK_VERSION:-unknown}"
+echo "Working directory:   ${OOD_WD}"
+echo "DISPLAY:             ${DISPLAY}"
+echo
+
+
+# ----------------------------------------------------------------------
+# Desktop environment
+# ----------------------------------------------------------------------
+
+export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+
+
+# ----------------------------------------------------------------------
+# Start Openbox
+# ----------------------------------------------------------------------
+
+echo "Starting Openbox..."
+
+/usr/bin/openbox \
+    > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
+
+WM_PID=$!
+
+cleanup() {
+    if [[ -n "${WM_PID:-}" ]]; then
+        kill "${WM_PID}" 2>/dev/null || true
+    fi
+}
+
+trap cleanup EXIT
+
+sleep 1
+
+if ! kill -0 "${WM_PID}" 2>/dev/null; then
+    echo "WARNING: Openbox exited immediately."
+    echo "See:"
+    echo "  ${SESSION_OUTPUT_DIR}/window-manager.log"
+fi
+
+
+# ----------------------------------------------------------------------
+# Launch ImageMagick Display
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo
+echo "Launching ImageMagick Display..."
+echo
+
+set +e
+
+if [[ -n "${OOD_IMAGE:-}" ]]; then
+
+    echo "Opening image:"
+    echo "  ${OOD_IMAGE}"
+
+    "${APP_EXECUTABLE_PATH}" \
+        "${OOD_IMAGE}" \
+        > "${SESSION_OUTPUT_DIR}/imagemagick-display.log" 2>&1
+
+else
+
+    echo "No image selected."
+    echo "Opening ImageMagick built-in logo..."
+
+    "${APP_EXECUTABLE_PATH}" \
+        "logo:" \
+        > "${SESSION_OUTPUT_DIR}/imagemagick-display.log" 2>&1
+
+fi
+
+DISPLAY_EXIT_CODE=$?
+
+set -e
+
+
+# ----------------------------------------------------------------------
+# Exit diagnostics
+# ----------------------------------------------------------------------
+
+echo
+echo "ImageMagick Display exited with code: ${DISPLAY_EXIT_CODE}"
+
+if [[ ${DISPLAY_EXIT_CODE} -ne 0 ]]; then
+
+    echo
+    echo "ImageMagick Display log:"
+    echo "------------------------------------------------------------"
+
+    if [[ -f "${SESSION_OUTPUT_DIR}/imagemagick-display.log" ]]; then
+        tail -n 150 "${SESSION_OUTPUT_DIR}/imagemagick-display.log"
+    else
+        echo "ImageMagick Display log was not created."
+    fi
+
+    echo "------------------------------------------------------------"
+fi
+
+exit "${DISPLAY_EXIT_CODE}"

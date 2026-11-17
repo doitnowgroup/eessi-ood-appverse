@@ -1,0 +1,22 @@
+---
+name: "Valgrind - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "Valgrind"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch an interactive Valgrind environment using EESSI.
+  Provides memory debugging, profiling and thread-analysis tools
+  including Memcheck, Massif, Callgrind, Cachegrind and Helgrind.
+

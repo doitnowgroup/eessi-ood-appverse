@@ -1,0 +1,36 @@
+
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?TensorBoard executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${TB_LOGDIR:?TensorBoard log directory is missing}"
+: "${host:?Host is missing}"
+: "${port:?Port is missing}"
+: "${TB_PREFIX:?TensorBoard proxy prefix is missing}"
+
+
+# ----------------------------------------------------------------------
+# Start TensorBoard
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo "Starting TensorBoard..."
+echo "Host: ${host}"
+echo "Port: ${port}"
+echo "Log directory: ${TB_LOGDIR}"
+echo "Executable: ${APP_EXECUTABLE_PATH}"
+echo "Proxy prefix: ${TB_PREFIX}"
+
+"${APP_EXECUTABLE_PATH}" \
+    --logdir "${TB_LOGDIR}" \
+    --host "${OOD_APP_BIND_HOST:-${host}}" \
+    --port "${port}" \
+    --path_prefix "${TB_PREFIX}"

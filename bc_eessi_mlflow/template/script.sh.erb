@@ -1,0 +1,62 @@
+
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+
+# ----------------------------------------------------------------------
+# Validate environment
+# ----------------------------------------------------------------------
+
+: "${APP_EXECUTABLE_PATH:?MLflow executable is missing}"
+: "${OOD_WD:?Working directory is missing}"
+: "${host:?Host is missing}"
+: "${port:?Port is missing}"
+: "${MLFLOW_PREFIX:?MLflow proxy prefix is missing}"
+
+
+# ----------------------------------------------------------------------
+# Create private session storage
+# ----------------------------------------------------------------------
+
+umask 077
+
+MLFLOW_STATE="$(mktemp -d "/tmp/ood-mlflow-${USER}-XXXXXX")"
+
+cleanup() {
+    rm -rf -- "${MLFLOW_STATE}"
+}
+
+trap cleanup EXIT
+
+mkdir -p "${MLFLOW_STATE}/artifacts"
+
+
+# ----------------------------------------------------------------------
+# MLflow storage configuration
+# ----------------------------------------------------------------------
+
+MLFLOW_BACKEND_URI="sqlite:///${MLFLOW_STATE}/tracking.db"
+
+MLFLOW_ARTIFACTS_DIR="${MLFLOW_STATE}/artifacts"
+
+
+# ----------------------------------------------------------------------
+# Start MLflow Server
+# ----------------------------------------------------------------------
+
+cd "${OOD_WD}"
+
+echo "Starting MLflow Server..."
+echo "Host: ${host}"
+echo "Port: ${port}"
+echo "Executable: ${APP_EXECUTABLE_PATH}"
+
+"${APP_EXECUTABLE_PATH}" server \
+    --host "${OOD_APP_BIND_HOST:-${host}}" \
+    --port "${port}" \
+    --workers 1 \
+    --backend-store-uri "${MLFLOW_BACKEND_URI}" \
+    --artifacts-destination "${MLFLOW_ARTIFACTS_DIR}" \
+    --serve-artifacts \
+    --static-prefix "${MLFLOW_PREFIX}"

@@ -1,0 +1,22 @@
+---
+name: "ImageMagick Display - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "ImageMagick Display"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch ImageMagick Display using EESSI.
+  View, inspect and interact with images using the ImageMagick
+  graphical X11 display application.
+

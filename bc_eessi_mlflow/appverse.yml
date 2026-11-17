@@ -1,0 +1,18 @@
+
+title: "MLflow - EESSI"
+
+description: >
+  Open OnDemand interactive MLflow application
+  using software provided by the EESSI software stack.
+
+software: "MLflow"
+
+app_type: "batch-connect-basic"
+
+implementation_tags:
+  - "batch connect"
+  - "modules"
+
+maintainer:
+  name: "Do IT Now"
+  support_url: "ood@doitnowgroup.com"

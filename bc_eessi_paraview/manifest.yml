@@ -1,0 +1,21 @@
+---
+name: "ParaView - EESSI"
+icon: icon.png
+
+category: "Interactive Apps"
+subcategory: "EESSI"
+
+role: batch_connect
+
+metadata:
+  dashboard_group: "EESSI"
+
+tile:
+  title: "ParaView"
+  border_color: "#0f766e"
+  sub_caption: "EESSI"
+
+description: |
+  Launch ParaView using software provided by EESSI.
+  Visualize and analyze scientific datasets.
+
