@@ -69,7 +69,7 @@ All applications are site-agnostic (`cluster: "*"`) and inherit cluster-level se
 
 ### Example Cluster VNC Configuration (`/etc/ood/config/clusters.d/my_cluster.yml`)
 
-~~yaml
+```yaml
 v2:
   batch_connect:
     vnc:
@@ -78,7 +78,7 @@ v2:
         export PATH="/opt/TurboVNC/bin:$PATH"
         export XDG_DATA_DIRS="/usr/local/share:/usr/share${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
         %s
-~~
+```
 
 ## License
 
