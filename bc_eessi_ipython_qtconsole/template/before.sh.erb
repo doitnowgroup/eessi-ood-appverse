@@ -348,8 +348,15 @@ echo "Preparing IPython QtConsole - EESSI session..."
 echo
 echo "Loading IPython QtConsole dependencies..."
 
-module load PyQt5/5.15.10-GCCcore-12.3.0
-module load JupyterLab/4.0.5-GCCcore-12.3.0
+module load PyQt5/5.15.10-GCCcore-12.3.0 || {
+    echo "ERROR: Failed to load PyQt5/5.15.10-GCCcore-12.3.0" >&2
+    exit 1
+}
+
+module load JupyterLab/4.0.5-GCCcore-12.3.0 || {
+    echo "ERROR: Failed to load JupyterLab/4.0.5-GCCcore-12.3.0" >&2
+    exit 1
+}
 
 echo
 echo "Loaded modules:"
@@ -387,16 +394,30 @@ fi
 
 
 # ----------------------------------------------------------------------
-# QtConsole frontend environment
+# QtConsole frontend environment (site override or per-user auto-venv)
 # ----------------------------------------------------------------------
 
-QTCONSOLE_ENV="/opt/ood-apps/ipython-qtconsole"
+if [[ -n "${QTCONSOLE_VENV:-}" ]]; then
+    QTCONSOLE_ENV="${QTCONSOLE_VENV}"
+elif [[ -x "/opt/ood-apps/ipython-qtconsole/bin/jupyter-qtconsole" ]]; then
+    QTCONSOLE_ENV="/opt/ood-apps/ipython-qtconsole"
+else
+    QTCONSOLE_ENV="${HOME}/.local/share/eessi-ood/ipython-qtconsole-${EESSI_VERSION:-2023.06}"
+fi
+
 QTCONSOLE_EXECUTABLE="${QTCONSOLE_ENV}/bin/jupyter-qtconsole"
 
 if [[ ! -x "${QTCONSOLE_EXECUTABLE}" ]]; then
-    echo "ERROR: QtConsole frontend is not available:"
-    echo "  ${QTCONSOLE_EXECUTABLE}"
-    exit 1
+    echo "Bootstrapping QtConsole frontend in ${QTCONSOLE_ENV}..."
+    mkdir -p "$(dirname "${QTCONSOLE_ENV}")"
+    python3 -m venv --system-site-packages "${QTCONSOLE_ENV}" || {
+        echo "ERROR: Failed to create QtConsole virtual environment at ${QTCONSOLE_ENV}" >&2
+        exit 1
+    }
+    "${QTCONSOLE_ENV}/bin/pip" install --quiet "qtconsole<5.7" ipython_pygments_lexers || {
+        echo "ERROR: Failed to install qtconsole into ${QTCONSOLE_ENV}" >&2
+        exit 1
+    }
 fi
 
 export QTCONSOLE_ENV

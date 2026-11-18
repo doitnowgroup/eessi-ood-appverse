@@ -164,7 +164,7 @@ if [[ ! -x /usr/bin/openbox ]]; then
     exit 1
 fi
 
-/usr/bin/openbox \
+"${OPENBOX_BIN}" \
     > "${SESSION_OUTPUT_DIR}/window-manager.log" 2>&1 &
 
 WM_PID=$!
