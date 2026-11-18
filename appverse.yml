@@ -1,51 +1,131 @@
 apps:
 - name: bc_eessi_bokeh
   path: bc_eessi_bokeh
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_fastqc
   path: bc_eessi_fastqc
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_feh
   path: bc_eessi_feh
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_gmsh
   path: bc_eessi_gmsh
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_gnuplot
   path: bc_eessi_gnuplot
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_graphviz
   path: bc_eessi_graphviz
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_grass
   path: bc_eessi_grass
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_imagemagick_display
   path: bc_eessi_imagemagick_display
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_ipython_qtconsole
   path: bc_eessi_ipython_qtconsole
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_jgmenu
   path: bc_eessi_jgmenu
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_jupyter
   path: bc_eessi_jupyter
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_jupyter_notebook
   path: bc_eessi_jupyter_notebook
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_lavavu
   path: bc_eessi_lavavu
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_mlflow
   path: bc_eessi_mlflow
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_octave
   path: bc_eessi_octave
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_opengl_mesa_demos
   path: bc_eessi_opengl_mesa_demos
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_paraver
   path: bc_eessi_paraver
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_paraview
   path: bc_eessi_paraview
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_root
   path: bc_eessi_root
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_rstudio
   path: bc_eessi_rstudio
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_tensorboard
   path: bc_eessi_tensorboard
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_valgrind
   path: bc_eessi_valgrind
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_vispy
   path: bc_eessi_vispy
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_vulkan_tools
   path: bc_eessi_vulkan_tools
+  tags:
+  - eessi
+  - cvmfs
 - name: bc_eessi_xterm
   path: bc_eessi_xterm
+  tags:
+  - eessi
+  - cvmfs
+tags:
+- eessi
+- open-ondemand
+- cvmfs
+- hpc
