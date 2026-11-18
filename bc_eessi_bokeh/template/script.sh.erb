@@ -39,7 +39,7 @@ echo "Working directory: ${OOD_WD}"
 # ------------------------------------------------------------
 
 exec "${APP_EXECUTABLE_PATH}" serve "${OOD_WD}/main.py" \
-    --address "${host}" \
+    --address "${OOD_APP_BIND_HOST:-${host}}" \
     --port "${port}" \
     --prefix "${BOKEH_PREFIX}" \
     --allow-websocket-origin "${OOD_PUBLIC_HOST}" \
