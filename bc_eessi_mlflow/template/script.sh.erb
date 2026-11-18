@@ -48,7 +48,7 @@ PROXY_BIND_HOST="${OOD_APP_BIND_HOST:-${host}}"
 
 
 # ----------------------------------------------------------------------
-# Start internal MLflow Server on loopback and Basic Auth reverse proxy
+# Start internal MLflow Server on loopback and Authenticated Proxy
 # ----------------------------------------------------------------------
 
 cd "${OOD_WD}"
@@ -78,39 +78,81 @@ done
 export PROXY_BIND_HOST
 exec python3 - <<'PY'
 import base64
+import hashlib
 import hmac
 import http.client
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import os
+from urllib.parse import parse_qs, urlsplit
 
 BIND_HOST = os.environ["PROXY_BIND_HOST"]
 LISTEN_PORT = int(os.environ["port"])
 TARGET_PORT = int(os.environ["mlflow_port"])
-EXPECTED_TOKEN = base64.b64encode(f"ood:{os.environ['password']}".encode("utf-8")).decode("ascii")
+PREFIX = os.environ["MLFLOW_PREFIX"].rstrip("/")
+PASSWORD = os.environ["password"]
+COOKIE_NAME = "ood_mlflow_session"
+COOKIE_TOKEN = hmac.new(PASSWORD.encode("utf-8"), b"mlflow-ood-session", hashlib.sha256).hexdigest()
+EXPECTED_BASIC = base64.b64encode(f"ood:{PASSWORD}".encode("utf-8")).decode("ascii")
 
 
 class AuthProxyHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
     def _authorized(self):
+        cookie_hdr = self.headers.get("Cookie", "")
+        if cookie_hdr:
+            cookies = SimpleCookie()
+            cookies.load(cookie_hdr)
+            if COOKIE_NAME in cookies and hmac.compare_digest(cookies[COOKIE_NAME].value, COOKIE_TOKEN):
+                return True
         auth = self.headers.get("Authorization", "")
-        if not auth.startswith("Basic "):
-            return False
-        token = auth.split(" ", 1)[1].strip()
-        return hmac.compare_digest(token, EXPECTED_TOKEN)
+        if auth.startswith("Basic "):
+            token = auth.split(" ", 1)[1].strip()
+            if hmac.compare_digest(token, EXPECTED_BASIC):
+                return True
+        return False
 
-    def _challenge(self):
-        body = b"Authentication required"
+    def _render_login(self, error_msg=""):
+        err_html = f'<p style="color:#b91c1c;">{error_msg}</p>' if error_msg else ""
+        html = f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>MLflow Login</title></head>
+<body style="font-family:sans-serif;max-width:420px;margin:4rem auto;">
+<h2>MLflow Session Authentication</h2>
+{err_html}
+<form method="post" action="{PREFIX}/ood-login">
+<label>Session Password:<br><input type="password" name="password" autofocus style="width:100%;padding:8px;margin:8px 0;"></label>
+<button type="submit" style="padding:8px 16px;">Sign in</button>
+</form></body></html>""".encode("utf-8")
         self.send_response(401)
-        self.send_header("WWW-Authenticate", 'Basic realm="Open OnDemand MLflow"')
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(html)))
+        self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(body)
+        self.wfile.write(html)
+
+    def _handle_login(self):
+        content_len = int(self.headers.get("Content-Length", "0"))
+        raw = self.rfile.read(content_len).decode("utf-8", errors="replace")
+        submitted = parse_qs(raw).get("password", [""])[0]
+        if hmac.compare_digest(submitted, PASSWORD):
+            self.send_response(302)
+            self.send_header("Location", f"{PREFIX}/")
+            self.send_header("Set-Cookie", f"{COOKIE_NAME}={COOKIE_TOKEN}; Path={PREFIX}/; HttpOnly; SameSite=Lax")
+            self.send_header("Content-Length", "0")
+            self.send_header("Connection", "close")
+            self.end_headers()
+        else:
+            self._render_login("Invalid session password.")
 
     def _proxy(self):
+        req_path = urlsplit(self.path).path
+        if self.command == "POST" and req_path.endswith("/ood-login"):
+            self._handle_login()
+            return
+
         if not self._authorized():
-            self._challenge()
+            self._render_login()
             return
 
         content_len = int(self.headers.get("Content-Length", "0"))
