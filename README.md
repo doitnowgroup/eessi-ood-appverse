@@ -61,11 +61,13 @@ All applications are site-agnostic (`cluster: "*"`) and inherit cluster-level se
 | **Cluster Name** | `/etc/ood/config/clusters.d/<cluster>.yml` | Automatic (`cluster: "*"`) | OOD automatically routes to your configured cluster(s). |
 | **EESSI Mount Root** | `/etc/default/eessi-ood` (`EESSI_ROOT`) or `/etc/ood/config/apps/<app>/env` | `/cvmfs/software.eessi.io` | Override if CVMFS is mounted under a custom path. |
 | **EESSI Release Version** | `/etc/default/eessi-ood` (`EESSI_VERSION_OVERRIDE`) | `2025.06` (or `2023.06` for legacy apps) | Override the default EESSI stack release per site or per app. |
+| **EESSI CPU Target Override** | `/etc/default/eessi-ood` (`EESSI_SOFTWARE_SUBDIR_OVERRIDE`) | Auto-detected by EESSI | Set (e.g., `x86_64/generic`) on VMs or nodes where hypervisor CPU flags differ from physical host microarchitecture. |
 | **Websockify Path** | `/etc/ood/config/clusters.d/<cluster>.yml` (`v2.batch_connect.vnc.websockify_cmd`) | `/usr/bin/websockify` | Required on execution nodes for `vnc` template apps (use a websockify build supporting `--heartbeat` for OOD 4.x). |
 | **TurboVNC Path** | `/etc/ood/config/clusters.d/<cluster>.yml` (`v2.batch_connect.vnc.script_wrapper`) | `/opt/TurboVNC/bin` | Prepend TurboVNC `bin` directory to `PATH` in your cluster's `script_wrapper`. |
 | **XDG / gdk-pixbuf / Theme Paths** | `/etc/ood/config/clusters.d/<cluster>.yml` (`v2.batch_connect.vnc.script_wrapper`) | `XDG_DATA_DIRS=/usr/local/share:/usr/share` | Ensures Openbox themes, system icons, and GTK/gdk-pixbuf loaders resolve cleanly alongside EESSI. |
-| **Single-User Web App Binding** | `/etc/default/eessi-ood` (`OOD_APP_BIND_HOST`) | `${host}` | For apps without built-in auth (`bc_eessi_mlflow`, `bc_eessi_tensorboard`), set `OOD_APP_BIND_HOST="127.0.0.1"` on single-node `systemd` hosts, or restrict compute-node ports via firewall rules on Slurm clusters. |
+| **Web App Bind Address** | `/etc/default/eessi-ood` (`OOD_APP_BIND_HOST`) | `${host}` | Controls bind address for web apps (`bc_eessi_bokeh`, `bc_eessi_mlflow` proxy, `bc_eessi_tensorboard`); set `127.0.0.1` on single-node or NAT-addressed VMs. |
 | **Bokeh WebSocket Origin** | `/etc/default/eessi-ood` (`OOD_PUBLIC_HOST`) | `$(hostname -f)` | Set to your external OOD portal hostname if behind a reverse proxy or load balancer. |
+| **IPython QtConsole Venv** | `/etc/default/eessi-ood` (`QTCONSOLE_VENV`) | `~/.local/share/eessi-ood/ipython-qtconsole-<version>` | Optional path to a shared pre-built QtConsole environment (falls back to `/opt/ood-apps/ipython-qtconsole` or per-user auto-bootstrap). |
 
 ### Example Cluster VNC Configuration (`/etc/ood/config/clusters.d/my_cluster.yml`)
 
@@ -80,6 +82,15 @@ v2:
         %s
 ```
 
+## Operational Recommendations
+
+Copy any subset (or all 25) of the bc_eessi_<app> directories into /var/www/ood/apps/sys/ (or install directly via the Open OnDemand AppVerse catalog using appverse.yml):
+
+```bash
+git clone [https://github.com/doitnowgroup/eessi-ood-appverse.git](https://github.com/doitnowgroup/eessi-ood-appverse.git)
+sudo cp -r eessi-ood-appverse/bc_eessi_* /var/www/ood/apps/sys/
+```
+
 ## License
 
-Apache-2.0
+This project is licensed under the Apache License 2.0.
