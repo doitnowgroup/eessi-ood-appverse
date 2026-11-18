@@ -1,4 +1,3 @@
-
 #!/usr/bin/env bash
 
 set -euo pipefail
@@ -12,6 +11,8 @@ set -euo pipefail
 : "${OOD_WD:?Working directory is missing}"
 : "${host:?Host is missing}"
 : "${port:?Port is missing}"
+: "${mlflow_port:?Internal MLflow port is missing}"
+: "${password:?Session password is missing}"
 : "${MLFLOW_PREFIX:?MLflow proxy prefix is missing}"
 
 
@@ -22,12 +23,17 @@ set -euo pipefail
 umask 077
 
 MLFLOW_STATE="$(mktemp -d "/tmp/ood-mlflow-${USER}-XXXXXX")"
+MLFLOW_PID=""
 
 cleanup() {
+    if [[ -n "${MLFLOW_PID}" ]] && kill -0 "${MLFLOW_PID}" 2>/dev/null; then
+        kill "${MLFLOW_PID}" 2>/dev/null || true
+        wait "${MLFLOW_PID}" 2>/dev/null || true
+    fi
     rm -rf -- "${MLFLOW_STATE}"
 }
 
-trap cleanup EXIT
+trap cleanup EXIT INT TERM
 
 mkdir -p "${MLFLOW_STATE}/artifacts"
 
@@ -37,26 +43,116 @@ mkdir -p "${MLFLOW_STATE}/artifacts"
 # ----------------------------------------------------------------------
 
 MLFLOW_BACKEND_URI="sqlite:///${MLFLOW_STATE}/tracking.db"
-
 MLFLOW_ARTIFACTS_DIR="${MLFLOW_STATE}/artifacts"
+PROXY_BIND_HOST="${OOD_APP_BIND_HOST:-${host}}"
 
 
 # ----------------------------------------------------------------------
-# Start MLflow Server
+# Start internal MLflow Server on loopback and Basic Auth reverse proxy
 # ----------------------------------------------------------------------
 
 cd "${OOD_WD}"
 
-echo "Starting MLflow Server..."
-echo "Host: ${host}"
-echo "Port: ${port}"
+echo "Starting internal MLflow Server on 127.0.0.1:${mlflow_port}..."
+echo "Proxy Host: ${PROXY_BIND_HOST}"
+echo "Proxy Port: ${port}"
 echo "Executable: ${APP_EXECUTABLE_PATH}"
 
 "${APP_EXECUTABLE_PATH}" server \
-    --host "${OOD_APP_BIND_HOST:-${host}}" \
-    --port "${port}" \
+    --host 127.0.0.1 \
+    --port "${mlflow_port}" \
     --workers 1 \
     --backend-store-uri "${MLFLOW_BACKEND_URI}" \
     --artifacts-destination "${MLFLOW_ARTIFACTS_DIR}" \
     --serve-artifacts \
-    --static-prefix "${MLFLOW_PREFIX}"
+    --static-prefix "${MLFLOW_PREFIX}" &
+MLFLOW_PID=$!
+
+for _ in $(seq 1 30); do
+    if python3 -c "import socket; s=socket.create_connection(('127.0.0.1', int('${mlflow_port}')), 0.5); s.close()" 2>/dev/null; then
+        break
+    fi
+    sleep 1
+done
+
+export PROXY_BIND_HOST
+exec python3 - <<'PY'
+import base64
+import hmac
+import http.client
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import os
+
+BIND_HOST = os.environ["PROXY_BIND_HOST"]
+LISTEN_PORT = int(os.environ["port"])
+TARGET_PORT = int(os.environ["mlflow_port"])
+EXPECTED_TOKEN = base64.b64encode(f"ood:{os.environ['password']}".encode("utf-8")).decode("ascii")
+
+
+class AuthProxyHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def _authorized(self):
+        auth = self.headers.get("Authorization", "")
+        if not auth.startswith("Basic "):
+            return False
+        token = auth.split(" ", 1)[1].strip()
+        return hmac.compare_digest(token, EXPECTED_TOKEN)
+
+    def _challenge(self):
+        body = b"Authentication required"
+        self.send_response(401)
+        self.send_header("WWW-Authenticate", 'Basic realm="Open OnDemand MLflow"')
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _proxy(self):
+        if not self._authorized():
+            self._challenge()
+            return
+
+        content_len = int(self.headers.get("Content-Length", "0"))
+        body = self.rfile.read(content_len) if content_len > 0 else None
+
+        fwd_headers = {
+            k: v
+            for k, v in self.headers.items()
+            if k.lower() not in ("host", "authorization", "connection", "proxy-connection", "keep-alive", "transfer-encoding")
+        }
+        fwd_headers["Host"] = f"127.0.0.1:{TARGET_PORT}"
+        fwd_headers["Connection"] = "close"
+
+        conn = http.client.HTTPConnection("127.0.0.1", TARGET_PORT, timeout=60)
+        try:
+            conn.request(self.command, self.path, body=body, headers=fwd_headers)
+            resp = conn.getresponse()
+            resp_body = resp.read()
+
+            self.send_response(resp.status, resp.reason)
+            for k, v in resp.getheaders():
+                if k.lower() not in ("transfer-encoding", "connection", "keep-alive", "content-length"):
+                    self.send_header(k, v)
+            self.send_header("Content-Length", str(len(resp_body)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(resp_body)
+        finally:
+            conn.close()
+
+    def do_GET(self): self._proxy()
+    def do_POST(self): self._proxy()
+    def do_PUT(self): self._proxy()
+    def do_DELETE(self): self._proxy()
+    def do_PATCH(self): self._proxy()
+    def do_HEAD(self): self._proxy()
+    def do_OPTIONS(self): self._proxy()
+
+    def log_message(self, fmt, *args):
+        pass
+
+
+server = ThreadingHTTPServer((BIND_HOST, LISTEN_PORT), AuthProxyHandler)
+server.serve_forever()
+PY

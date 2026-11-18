@@ -1,4 +1,3 @@
-
 # ----------------------------------------------------------------------
 # Generic EESSI runtime initialization
 # ----------------------------------------------------------------------
@@ -367,11 +366,23 @@ echo "  ${APP_EXECUTABLE_PATH}"
 # ----------------------------------------------------------------------
 
 port="$(find_port)"
+mlflow_port="$(find_port)"
 
-if [[ -z "${port}" ]]; then
-    echo "ERROR: Unable to find an available TCP port."
+if [[ -z "${port}" || -z "${mlflow_port}" ]]; then
+    echo "ERROR: Unable to find available TCP ports."
     exit 1
 fi
+
+if declare -F create_passwd >/dev/null 2>&1; then
+    password="$(create_passwd 16)"
+else
+    password="$(python3 -c 'import secrets; print(secrets.token_urlsafe(12))')"
+fi
+
+export host
+export port
+export mlflow_port
+export password
 
 
 # ----------------------------------------------------------------------
@@ -381,7 +392,7 @@ fi
 <%- if context.working_dir.blank? -%>
 OOD_WD="$HOME"
 <%- else -%>
-OOD_WD="<%= context.working_dir.to_s %>"
+OOD_WD=<%= Shellwords.escape(context.working_dir.to_s) %>
 <%- end -%>
 
 if [[ ! -d "${OOD_WD}" ]]; then
